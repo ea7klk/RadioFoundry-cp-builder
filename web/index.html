@@ -1,0 +1,264 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 The RadioFoundry-cp-builder Authors -->
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>RadioFoundry CP Builder</title>
+	<meta name="description" content="Build a RadioFoundry codeplug from your location: IARU calling frequencies, APRS, PMR, FRS, marine channels, Brandmeister DMR repeaters and analog repeaters.">
+	<link rel="icon" href="favicon.svg" type="image/svg+xml">
+	<link rel="stylesheet" href="app.css">
+</head>
+<body>
+	<a class="skip-link" href="#main">Skip to content</a>
+
+	<header class="masthead">
+		<div class="wrap masthead-inner">
+			<a class="brand" href="/">
+				<span class="brand-mark" aria-hidden="true">RF</span>
+				<span class="brand-text">
+					<span class="eyebrow">RadioFoundry</span>
+					<span class="brand-name">CP Builder</span>
+				</span>
+			</a>
+			<p class="masthead-note">Based on <a href="https://github.com/RadioFoundry/RadioFoundry" rel="noopener" target="_blank">RadioFoundry</a> · MIT · runs on your machine</p>
+		</div>
+	</header>
+
+	<section class="hero">
+		<div class="wrap">
+			<p class="kicker">Location → channels → codeplug</p>
+			<h1>Build a codeplug around where you actually operate.</h1>
+			<p class="lead">Pick a location, add standard analog channels, pull in nearby Brandmeister DMR repeaters and analog repeaters, then export a file for the official RadioFoundry codeplug editor. Nothing you build leaves this browser.</p>
+			<ul class="hero-points">
+				<li>Brandmeister repeaters with their static talkgroups, distances and default contact</li>
+				<li>IARU calling, APRS, PMR446, FRS/GMRS and marine VHF channel packs</li>
+				<li>Analog repeaters with CTCSS/DCS tones from the HearHam open database</li>
+			</ul>
+		</div>
+	</section>
+
+	<main id="main" class="wrap layout">
+		<div class="stack">
+
+			<section class="card" id="location-card" aria-labelledby="location-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">1</span>
+					<div>
+						<h2 id="location-title">Your location</h2>
+						<p class="hint">Coordinates, a Maidenhead locator or a nearby city. Distances and the APRS position use this point.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="grid-3">
+						<label class="field">
+							<span>Latitude</span>
+							<input id="lat" type="number" step="0.00001" min="-90" max="90" inputmode="decimal" placeholder="36.72130" autocomplete="off">
+						</label>
+						<label class="field">
+							<span>Longitude</span>
+							<input id="lon" type="number" step="0.00001" min="-180" max="180" inputmode="decimal" placeholder="-4.42140" autocomplete="off">
+						</label>
+						<label class="field">
+							<span>Maidenhead locator</span>
+							<input id="locator" type="text" maxlength="8" placeholder="IM76SR" autocomplete="off" spellcheck="false">
+						</label>
+					</div>
+					<div class="button-row">
+						<button id="apply-latlon" class="btn" type="button">Use coordinates</button>
+						<button id="apply-locator" class="btn" type="button">Use locator</button>
+						<button id="geolocate" class="btn btn-ghost" type="button">Use my location</button>
+					</div>
+
+					<div class="city-row">
+						<label class="field city-field">
+							<span>Nearby city</span>
+							<span class="input-row">
+								<input id="city" type="search" placeholder="Málaga, Sevilla, Gibraltar…" autocomplete="off">
+								<button id="city-search" class="btn" type="button">Find</button>
+							</span>
+						</label>
+					</div>
+					<div id="city-results" class="city-results" hidden></div>
+					<p id="location-readout" class="readout" aria-live="polite">No location set yet.</p>
+					<p id="location-error" class="status error" role="alert" hidden></p>
+				</div>
+			</section>
+
+			<section class="card" id="packs-card" aria-labelledby="packs-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">2</span>
+					<div>
+						<h2 id="packs-title">Standard analog channels</h2>
+						<p class="hint">Channel packs add known frequencies to the codeplug. Your country picks the IARU region and the APRS default; you can override the region.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="grid-2">
+						<label class="field">
+							<span>Country</span>
+							<select id="country"></select>
+						</label>
+						<label class="field">
+							<span>IARU region</span>
+							<select id="region">
+								<option value="R1">IARU Region 1 — Europe, Africa, Middle East</option>
+								<option value="R2">IARU Region 2 — the Americas</option>
+								<option value="R3">IARU Region 3 — Asia-Pacific</option>
+							</select>
+						</label>
+					</div>
+					<div class="button-row pack-tools">
+						<button id="pack-defaults" class="btn btn-ghost btn-small" type="button">Use regional defaults</button>
+						<label class="check"><input id="pack-all" type="checkbox"><span>Show packs from other regions</span></label>
+						<span id="pack-count" class="muted small"></span>
+					</div>
+					<div id="pack-list" class="pack-list"></div>
+					<div class="options">
+						<label class="check">
+							<input id="aprs-config" type="checkbox" checked>
+							<span>Add an APRS position at this location</span>
+						</label>
+						<label class="field field-inline">
+							<span>APRS SSID</span>
+							<input id="aprs-ssid" type="number" min="0" max="15" step="1" value="7" inputmode="numeric">
+						</label>
+					</div>
+					<p id="pack-note" class="hint"></p>
+				</div>
+			</section>
+
+			<section class="card" id="dmr-card" aria-labelledby="dmr-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">3</span>
+					<div>
+						<h2 id="dmr-title">Nearby DMR repeaters</h2>
+						<p class="hint">Brandmeister's public Halligan API, filtered by distance. The first static talkgroup the API returns becomes the channel's default contact; all of them go into an RX group list.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="radius-row">
+						<label for="dmr-radius">Radius</label>
+						<input id="dmr-radius" type="range" min="5" max="300" step="5" value="50">
+						<output id="dmr-radius-out" for="dmr-radius">50 km</output>
+					</div>
+					<div class="button-row">
+						<button id="dmr-search" class="btn" type="button">Find DMR repeaters</button>
+						<label class="check">
+							<input id="dmr-fallback" type="checkbox" checked>
+							<span>Use TG 9 (Local) when a repeater has no static talkgroups</span>
+						</label>
+					</div>
+					<p id="dmr-status" class="status" aria-live="polite"></p>
+					<div id="dmr-results" class="results"></div>
+				</div>
+			</section>
+
+			<section class="card" id="analog-card" aria-labelledby="analog-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">4</span>
+					<div>
+						<h2 id="analog-title">Nearby analog repeaters</h2>
+						<p class="hint">FM repeaters from HearHam's open database, with the repeater's shift and any CTCSS/DCS tone it lists. Tone coverage varies by country; entries without one are marked <b>no tone</b>. Verify a repeater before you transmit.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="radius-row">
+						<label for="analog-radius">Radius</label>
+						<input id="analog-radius" type="range" min="5" max="300" step="5" value="50">
+						<output id="analog-radius-out" for="analog-radius">50 km</output>
+					</div>
+					<div class="button-row">
+						<button id="analog-search" class="btn" type="button">Find analog repeaters</button>
+						<label class="check">
+							<input id="analog-toned" type="checkbox">
+							<span>Only repeaters with a transmit tone</span>
+						</label>
+						<label class="check">
+							<input id="analog-simplex" type="checkbox">
+							<span>Include simplex and link entries</span>
+						</label>
+					</div>
+					<p id="analog-status" class="status" aria-live="polite"></p>
+					<p class="hint small">If a repeater needs a tone and the database has none, set it by hand in the RadioFoundry editor after importing.</p>
+					<div class="file-row">
+						<label class="field">
+							<span>Or load your own repeater list (CSV or JSON)</span>
+							<input id="analog-file" type="file" accept=".csv,.txt,.json,text/csv,application/json">
+						</label>
+						<p class="hint small">Columns: <code>callsign</code>, <code>output_mhz</code> (or <code>frequency</code>), <code>offset_mhz</code> (or <code>tx_mhz</code>), <code>tx_tone</code>, <code>rx_tone</code>, <code>lat</code>, <code>lon</code>, <code>city</code>, <code>mode</code>. JSON is a list of objects with those names. The file is read in this browser and never uploaded.</p>
+					</div>
+					<div id="analog-file-report" class="build-output" aria-live="polite"></div>
+					<div id="analog-results" class="results"></div>
+				</div>
+			</section>
+
+			<section class="card" id="build-card" aria-labelledby="build-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">5</span>
+					<div>
+						<h2 id="build-title">Station and export</h2>
+						<p class="hint">The callsign becomes the radio name and the APRS source. The DMR ID goes into the codeplug's radio settings.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="grid-2">
+						<label class="field">
+							<span>Callsign</span>
+							<input id="callsign" type="text" maxlength="12" placeholder="EA7KLK" autocomplete="off" spellcheck="false">
+						</label>
+						<label class="field">
+							<span>DMR ID</span>
+							<input id="dmr-id" type="text" maxlength="8" inputmode="numeric" placeholder="1234567" autocomplete="off">
+						</label>
+					</div>
+					<div class="button-row">
+						<button id="build" class="btn btn-primary" type="button">Build codeplug</button>
+						<button id="reset" class="btn btn-ghost" type="button">Reset this page</button>
+					</div>
+					<div id="build-output" class="build-output" aria-live="polite"></div>
+				</div>
+			</section>
+		</div>
+
+		<aside class="side" aria-label="Codeplug summary">
+			<div class="card summary-card">
+				<div class="summary-head">
+					<h2>Your codeplug</h2>
+					<span id="summary-state" class="badge">draft</span>
+				</div>
+				<p id="summary-location" class="summary-location">No location set.</p>
+				<dl id="summary-counts" class="counts"></dl>
+				<div id="plot" class="plot" aria-hidden="true"></div>
+				<div id="summary-warnings" class="summary-warnings"></div>
+				<div class="downloads">
+					<button id="download-yaml" class="btn btn-primary" type="button" disabled>Download YAML</button>
+					<button id="download-csv" class="btn" type="button" disabled>Download CSV set</button>
+					<button id="copy-yaml" class="btn btn-ghost" type="button" disabled>Copy YAML</button>
+				</div>
+				<p class="small muted">Open the YAML with the <a href="https://radiofoundry.org/codeplug/index.html" target="_blank" rel="noopener">official RadioFoundry codeplug editor</a> to review it and write it to the radio.</p>
+			</div>
+
+			<div class="card sources-card">
+				<h3>Data sources</h3>
+				<ul id="sources" class="source-list">
+					<li>Loading…</li>
+				</ul>
+			</div>
+		</aside>
+	</main>
+
+	<footer class="footer">
+		<div class="wrap footer-inner">
+			<p>RadioFoundry CP Builder is an independent, MIT-licensed project. It is based on <a href="https://github.com/RadioFoundry/RadioFoundry" target="_blank" rel="noopener">RadioFoundry</a>, which supplies the codeplug model and file formats.</p>
+			<p class="small">Repeater data: Brandmeister and HearHam. Place search: OpenStreetMap Nominatim. Always check that you may transmit on a frequency before using it.</p>
+		</div>
+	</footer>
+
+	<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+	<noscript><p class="noscript">This builder needs JavaScript to build the codeplug in your browser.</p></noscript>
+
+	<script type="module" src="js/app.js"></script>
+</body>
+</html>

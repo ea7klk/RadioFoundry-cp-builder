@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The RadioFoundry-cp-builder Authors
+services:
+  cp-builder:
+    build: .
+    image: radiofoundry-cp-builder:latest
+    container_name: cp-builder
+    restart: unless-stopped
+    ports:
+      # Localhost only by default. Put a reverse proxy with TLS in front to
+      # expose it: the page has no login and its API spends upstream quotas.
+      - "127.0.0.1:8080:8080"
+    environment:
+      CPB_CACHE_DIR: /var/cache/cp-builder
+      CPB_MAX_RADIUS_KM: "300"
+      CPB_DEFAULT_RADIUS_KM: "50"
+    volumes:
+      - cp-builder-cache:/var/cache/cp-builder
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/api/health',timeout=4)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  cp-builder-cache:

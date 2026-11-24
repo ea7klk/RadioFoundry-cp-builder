@@ -1,0 +1,11 @@
+{
+  "_about": "Lets Node run the builder's modules and tests as ES modules (node --test tests/). The project has no npm dependencies.",
+  "name": "radiofoundry-cp-builder",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

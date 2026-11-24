@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The RadioFoundry-cp-builder Authors
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Python tests
+        run: python -m pytest -q
+
+      - name: JavaScript tests
+        run: node --test "tests/*.test.mjs"
+
+      - name: Compile check
+        run: |
+          python -m compileall -q server tests
+          for file in web/js/*.js; do node --check "$file"; done
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t radiofoundry-cp-builder:ci .
+      - name: Start it and ask for health
+        run: |
+          docker run -d --name cpb -p 18080:8080 radiofoundry-cp-builder:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/api/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs cpb
+          exit 1
