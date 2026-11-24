@@ -134,6 +134,17 @@ class Brandmeister:
         found.sort(key=lambda d: (d["status"] != 3, d["distance_km"], d["callsign"]))
         return found[:limit], devices
 
+    def talkgroup_index(self) -> tuple[list[dict[str, Any]], bool]:
+        """Every talkgroup, with the place its id or name belongs to."""
+        from .talkgroups import build_index
+
+        cached = self.cache.get(
+            "bm:talkgroups",
+            self.talkgroup_ttl,
+            lambda: self.fetcher(TALKGROUPS_URL, timeout=self.timeout, user_agent=self.user_agent),
+        )
+        return build_index(cached.data), cached.stale
+
     def talkgroup_names(self) -> tuple[dict[str, str], bool]:
         """Talkgroup id -> name. A failure here only costs nicer labels."""
         try:

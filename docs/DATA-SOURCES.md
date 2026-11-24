@@ -28,6 +28,22 @@ a missing channel from a wrong one.
   (ED1ZAS: Brandmeister `tx 438.2250`, `rx 430.6250`; HearHam 438.225 MHz with
   a −7.6 MHz offset), and against the operator's own description of the
   repeater's shift.
+- **Geography**: `GET /v2/talkgroup` is an id-to-name map with no place in it,
+  but the numbering carries one. Talkgroup ids are built on ITU country
+  prefixes (`214` Spain, `21429` a Spanish province, `262` Germany, `310` the
+  US, `724` Brazil), so `server/talkgroups.py` classifies each id by its first
+  three digits against a table of 235 prefixes. Continents follow the prefix
+  blocks — 2xx Europe, 3xx North America and the Caribbean, 4xx Asia, 5xx
+  Oceania, 6xx Africa, 7xx Latin America — with Central America and the
+  Caribbean in North America, and Cyprus and Türkiye in Europe.
+  - `1`, `2`, `8` and `9` are the system's local/cluster/regional ids: "Other".
+  - `90`–`99` and `901`–`999` are international, so the name decides: a
+    continent word keeps it in that continent (`92 Europe`, `93 North America`,
+    `969 DMR-Caribbean`), a country word makes it that country (`930
+    PanHellenic` → Greece), a language, technical service or interest group
+    makes it "Other" (`English`, `Parrot`, `Radio Test`, `Reddit`), and the rest
+    are "Worldwide" (`JOTA`, `SOTA`, `Worldwide Maritime`).
+  - A prefix not in the table falls through to the name, then to "Other".
 - **Slots**: each static talkgroup row carries `slot` (1 or 2). It becomes that
   contact's **timeslot override** in the codeplug, because the slot is a property
   of the subscription at that repeater: the same talkgroup can be TS1 on one and

@@ -19,6 +19,8 @@ Set a location — coordinates, a Maidenhead locator or a nearby city — then a
   Spain and the HearHam open database elsewhere, with the repeater's shift and
   its CTCSS/DCS tones — or from a repeater list you already have, as CSV or
   JSON, read in the browser.
+- **DMR contacts** picked from a searchable table of every Brandmeister
+  talkgroup, filtered by name, continent and country, several at a time.
 - **DMR simplex channels** on the Spanish national plan, as a group call to
   **TG 99**, an **AllCall** to 16777215, or **both** — with a channel name that
   says which.
@@ -75,6 +77,7 @@ node --test "tests/*.test.mjs" # builder: packs, model, YAML and CSV round trips
 | Analog repeater | one per repeater, with TX/RX tone | — | — | `ANALOG` |
 | Your own list (CSV/JSON) | one per row, with TX/RX tone | — | — | `ANALOG` |
 | DMR simplex plan | one per frequency and contact, talkaround, CC1 | TG 99 and/or AllCall | — | `DMR SIMPLEX` (+ `DMR ACCESS`) |
+| Talkgroup browser | — | every talkgroup you select, as a plain group call | — | — |
 | Channel packs | one per frequency or channel | — | — | `STANDARD` |
 | APRS pack plus a callsign | the APRS frequency as an FM channel | — | — | `APRS` |
 
@@ -148,6 +151,32 @@ The optional **access-point** frequencies (PA1-V … PA6-U, 144.8125–144.875 a
 430.400–439.825) are the over-the-air gateways the same document defines; they
 sit on slot 2 and get their own `DMR ACCESS` zone. The plan is Spain's: using it
 with another country selected adds a warning rather than stopping you.
+
+### DMR contacts
+
+A searchable table of Brandmeister's whole talkgroup list (1,848 on 2026-11-24),
+built from the same `/v2/talkgroup` call the repeater talkgroups use. Tick as
+many as you want — individually, or *select all shown* for a filtered view —
+and they become group-call contacts in the codeplug.
+
+Searching works three ways, because Brandmeister ids are built on ITU country
+prefixes:
+
+- **by name or number** — `Málaga`, `Spain`, `214`, `JOTA`;
+- **by continent** — Worldwide, Europe, North America and the Caribbean, South
+  America, Asia and the Middle East, Africa, Oceania;
+- **by country** — 122 countries, from the id's prefix (`214` Spain, `262`
+  Germany, `21429` a Spanish province) rather than from the name;
+- **Other** — the talkgroups with no identifiable geography: `Local`, `Cluster`,
+  `Radio Test`, `Parrot`, language nets (`English`, `German`), interest groups
+  (`Reddit`, `AMSAT`) and events (`JOTA`, `SOTA`).
+
+The country list and its counts follow the search, so typing `Málaga` leaves
+Spain as the only country on offer. Contacts added this way are plain group
+calls with no timeslot override: they work on any DMR channel. If a talkgroup is
+already in the codeplug from a repeater, that record is reused; if the repeater's
+record pins a slot, both exist and the pinned one is named `… TS2` so the two are
+told apart.
 
 ### Analog repeaters: both bands, two sources
 
@@ -236,6 +265,7 @@ server/          Python 3.11+ service, standard library only
   brandmeister.py  Halligan API v2: devices, talkgroups
   hearham.py     HearHam repeater database
   ure.py         URE's Spanish repeater map, both bands
+  talkgroups.py  talkgroup geography: ITU prefixes, continents, "other"
   geocode.py     Nominatim place search
   cache.py       JSON file cache with stale-if-error
   upstream.py    HTTP fetch with a size limit

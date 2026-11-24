@@ -54,5 +54,7 @@ export const api = {
 			toned_only: tonedOnly ? 1 : 0,
 			include_simplex: includeSimplex ? 1 : 0,
 		}),
+	talkgroups: ({ query = "", continent = "all", country = "", limit = 250 }) =>
+		getJSON("/api/talkgroups", { q: query, continent, country, limit }),
 	geocode: (query, lang) => getJSON("/api/geocode", { q: query, lang }),
 };

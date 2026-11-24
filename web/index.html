@@ -184,9 +184,63 @@
 				</div>
 			</section>
 
-			<section class="card" id="analog-card" aria-labelledby="analog-title">
+			<section class="card" id="contacts-card" aria-labelledby="contacts-title">
 				<div class="card-head">
 					<span class="step" aria-hidden="true">4</span>
+					<div>
+						<h2 id="contacts-title">DMR contacts</h2>
+						<p class="hint">Add talkgroups straight to the codeplug's contact list. Brandmeister's ids carry their country (214 Spain, 262 Germany), so you can search by name, by continent or by country; talkgroups with no identifiable place are under <b>Other</b>.</p>
+					</div>
+				</div>
+				<div class="card-body">
+					<div class="tg-filters">
+						<label class="field tg-search">
+							<span>Search by name or number</span>
+							<input id="tg-query" type="search" placeholder="Spain, Málaga, 214, JOTA…" autocomplete="off">
+						</label>
+						<label class="field">
+							<span>Continent</span>
+							<select id="tg-continent">
+								<option value="all">Every continent</option>
+							</select>
+						</label>
+						<label class="field">
+							<span>Country</span>
+							<select id="tg-country">
+								<option value="">Every country</option>
+							</select>
+						</label>
+					</div>
+					<div class="button-row tg-actions">
+						<button id="tg-search" class="btn" type="button">Search talkgroups</button>
+						<button id="tg-clear" class="btn btn-ghost btn-small" type="button">Clear selection</button>
+						<span id="tg-status" class="muted small" aria-live="polite">Loading the talkgroup list…</span>
+					</div>
+					<div id="tg-table-wrap" class="tg-table-wrap" hidden>
+						<table class="tg-table">
+							<thead>
+								<tr>
+									<th class="tg-check"><input id="tg-all" type="checkbox" aria-label="Select every talkgroup shown"></th>
+									<th>TG</th>
+									<th>Name</th>
+									<th>Country</th>
+								</tr>
+							</thead>
+							<tbody id="tg-rows"></tbody>
+						</table>
+					</div>
+					<p id="tg-more" class="hint small" hidden></p>
+					<div id="tg-chosen" class="tg-chosen" hidden>
+						<p class="subhead">Selected contacts <span id="tg-count" class="badge badge-accent">0</span></p>
+						<div id="tg-chips" class="tg-chips"></div>
+					</div>
+					<p class="hint small">These become group-call contacts with no timeslot override and no channel: pick them on any DMR channel, or let the editor add channels for them later.</p>
+				</div>
+			</section>
+
+			<section class="card" id="analog-card" aria-labelledby="analog-title">
+				<div class="card-head">
+					<span class="step" aria-hidden="true">5</span>
 					<div>
 						<h2 id="analog-title">Nearby analog repeaters</h2>
 						<p class="hint">FM repeaters on both bands from URE's national list for Spain and from HearHam's open database elsewhere, with the repeater's shift and any CTCSS/DCS tone. Tone coverage varies; entries without one are marked <b>no tone</b>. Verify a repeater before you transmit.</p>
@@ -231,7 +285,7 @@
 
 			<section class="card" id="build-card" aria-labelledby="build-title">
 				<div class="card-head">
-					<span class="step" aria-hidden="true">5</span>
+					<span class="step" aria-hidden="true">6</span>
 					<div>
 						<h2 id="build-title">Station and export</h2>
 						<p class="hint">The callsign becomes the radio name and the APRS source. The DMR ID goes into the codeplug's radio settings.</p>

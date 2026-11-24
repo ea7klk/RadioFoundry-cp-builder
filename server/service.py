@@ -15,6 +15,7 @@ from .config import Config
 from .upstream import UpstreamError
 from .geocode import Geocoder
 from .geo import band_of, valid_lat, valid_lon
+from .talkgroups import CONTINENTS, facets, fold
 from .hearham import HearHam
 from .ure import Ure
 from .upstream import UpstreamError
@@ -286,6 +287,77 @@ class Service:
             **meta,
         }
 
+    def talkgroups(
+        self,
+        query: str = "",
+        continent: str = "all",
+        country: str = "",
+        limit: int = 250,
+    ) -> dict[str, Any]:
+        """The Brandmeister talkgroup list, filtered by text, continent and country.
+
+        The facets (continents, countries and their counts) are computed on the
+        text-filtered set, so narrowing by name narrows the country list with it.
+        """
+        index, stale = self.bm.talkgroup_index()
+        known = {cid for cid, _ in CONTINENTS}
+        if continent and continent != "all" and continent not in known:
+            raise BadRequest("bad_continent", "unknown continent")
+        if country and not (len(country) == 2 and country.isalpha()):
+            raise BadRequest("bad_country", "country must be a two-letter code")
+        text = " ".join(query.split())
+        if len(text) > 80:
+            raise BadRequest("bad_query", "query is too long")
+
+        found = index
+        if text:
+            # Rank: the name starts with what was typed, then contains it, then
+            # matched only through its country, then the id.
+            needle = fold(text)
+            digits = "".join(char for char in text if char.isdigit())
+
+            def rank(item: dict[str, Any]) -> int | None:
+                name = fold(item["name"])
+                if name.startswith(needle):
+                    return 0
+                if needle in name:
+                    return 1
+                if needle in fold(item.get("country_name") or ""):
+                    return 2
+                if digits and digits in str(item["tg"]):
+                    return 3
+                return None
+
+            ranked = [(rank(item), item) for item in index]
+            found = [pair for pair in ranked if pair[0] is not None]
+            found.sort(key=lambda pair: (pair[0], pair[1]["tg"]))
+            facets_for_search = facets(item for _, item in found)
+            found = [item for _, item in found]
+        else:
+            facets_for_search = None
+        if facets_for_search is None:
+            facets_for_search = facets(found)
+        if continent and continent != "all":
+            found = [item for item in found if item["continent"] == continent]
+        if country:
+            found = [item for item in found if item.get("country") == country.upper()]
+
+        # Without a query the id order is the one operators know; with one, the
+        # order is the rank above.
+        if not text:
+            found = sorted(found, key=lambda item: item["tg"])
+        limit = min(max(int(limit), 1), self.config.max_results)
+        return {
+            "items": found[:limit],
+            "matched": len(found),
+            "total": len(index),
+            "limit": limit,
+            "truncated": len(found) > limit,
+            "facets": facets_for_search,
+            "stale": stale,
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+
     def geocode(self, query: str, lang: str = "en") -> dict[str, Any]:
         query = " ".join(query.split())
         if len(query) < 2:
@@ -328,4 +400,6 @@ def parse_params(query: dict[str, list[str]]) -> dict[str, str | None]:
         "toned_only": one("toned_only"),
         "band": one("band"),
         "sources": one("sources"),
+        "continent": one("continent"),
+        "country": one("country"),
     }

@@ -542,3 +542,121 @@ test("timeslot overrides survive the CSV round trip", () => {
 	assert.equal(model.contacts.find((contact) => contact.id === 21429).timeslot, 2);
 	assert.equal(model.channels[0].contact.timeslot, 2);
 });
+
+// --- contacts chosen in the talkgroup browser ---
+
+test("chosen talkgroups become plain group contacts", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [],
+		contacts: [{ tg: 214, name: "Spain" }, { tg: 92, name: "Europe" }, { tg: 9, name: "Local" }],
+		options: { aprsConfig: false },
+	}));
+	assert.equal(result.ok, true, JSON.stringify(result.errors));
+	assert.deepEqual(
+		result.model.contacts.map((contact) => [contact.name, contact.id, contact.type, contact.timeslot]),
+		[["Spain", 214, "group", 0], ["Europe", 92, "group", 0], ["Local", 9, "group", 0]],
+	);
+	assert.equal(result.model.channels.length, 0, "a contact is not a channel");
+	assert.ok(result.notes.some((note) => note.code === "contacts_added"));
+});
+
+test("contacts alone are a complete request", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], contacts: [{ tg: 91, name: "World-wide" }] }));
+	assert.equal(result.ok, true);
+	assert.equal(result.errors.length, 0);
+});
+
+test("the same talkgroup chosen twice is one contact", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [],
+		contacts: [{ tg: 214, name: "Spain" }, { tg: 214, name: "Spain" }],
+		options: { aprsConfig: false },
+	}));
+	assert.equal(result.model.contacts.length, 1);
+});
+
+test("a talkgroup used by a repeater still gets a plain contact", () => {
+	// The repeater's record pins TS2; the browser's choice is unpinned, so both
+	// exist and each name says what it is. Only a plain duplicate is skipped.
+	const result = buildCodeplug(base({
+		packs: [],
+		analog: [],
+		contacts: [{ tg: 214, name: "Spain" }],
+		dmr: [dmrRepeater({ talkgroups: [{ tg: 214, slot: 2, name: "Spain" }] })],
+		options: { aprsConfig: false },
+	}));
+	const spains = result.model.contacts.filter((contact) => contact.id === 214);
+	assert.deepEqual(
+		spains.map((contact) => [contact.name, contact.timeslot]).sort((a, b) => a[1] - b[1]),
+		[["Spain", 0], ["Spain TS2", 2]],
+	);
+});
+
+test("a plain contact that already exists is not added again", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		analog: [],
+		contacts: [{ tg: 21429, name: "Provincial Málaga" }],
+		dmr: [dmrRepeater({ talkgroups: [{ tg: 21429, slot: 0, name: "Provincial Málaga" }] })],
+		options: { aprsConfig: false },
+	}));
+	const matches = result.model.contacts.filter((contact) => contact.id === 21429);
+	assert.equal(matches.length, 1);
+	assert.equal(matches[0].timeslot, 0);
+	assert.ok(result.notes.some((note) => note.code === "contacts_added" && /already in the contacts table/.test(note.message)));
+});
+
+test("when both a pinned and a plain contact exist, the pinned one says which slot", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		analog: [],
+		contacts: [{ tg: 214, name: "Spain" }],
+		dmr: [dmrRepeater({ talkgroups: [{ tg: 214, slot: 2, name: "Spain" }, { tg: 91, slot: 1, name: "World-wide" }] })],
+		options: { aprsConfig: false },
+	}));
+	const spains = result.model.contacts.filter((contact) => contact.id === 214);
+	assert.deepEqual(
+		spains.map((contact) => [contact.name, contact.timeslot]).sort((a, b) => a[1] - b[1]),
+		[["Spain", 0], ["Spain TS2", 2]],
+	);
+	// a talkgroup only the repeater uses keeps its plain name and its override
+	const world = result.model.contacts.find((contact) => contact.id === 91);
+	assert.equal(world.name, "World-wide");
+	assert.equal(world.timeslot, 1);
+	// the channel points at the pinned record
+	const channel = result.model.channels.find((channel) => channel.mode === "dmr");
+	assert.equal(channel.contact.name, "Spain TS2");
+});
+
+test("chosen contacts survive the YAML and CSV round trips", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [],
+		contacts: [{ tg: 214, name: "Spain" }, { tg: 92, name: "Europe" }],
+		options: { aprsConfig: false },
+	}));
+	const fromYaml = empty();
+	importQdmr(fromYaml, result.yaml);
+	assert.deepEqual(fromYaml.contacts.map((contact) => [contact.name, contact.id, contact.type]), [["Spain", 214, "group"], ["Europe", 92, "group"]]);
+	const fromCsv = empty();
+	const { results } = importAll(fromCsv, result.csvFiles.map((file) => ({ name: file.name, text: file.text })));
+	assert.deepEqual(results.find((entry) => entry.table === "contacts").problems, []);
+	assert.deepEqual(fromCsv.contacts.map((contact) => contact.id), [214, 92]);
+});
+
+test("a chosen contact with a bad id is ignored", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [],
+		contacts: [{ tg: 0, name: "junk" }, { tg: "x", name: "junk" }, { tg: 214, name: "Spain" }],
+		options: { aprsConfig: false },
+	}));
+	assert.equal(result.ok, true);
+	assert.equal(result.model.contacts.length, 1);
+});

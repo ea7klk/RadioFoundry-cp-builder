@@ -69,6 +69,27 @@ def test_analog_route_rejects_an_unknown_source(server: str):
     assert body["error"]["code"] == "bad_sources"
 
 
+def test_talkgroups_route(server: str):
+    status, body, _ = get_json(f"{server}/api/talkgroups?limit=5")
+    assert status == 200
+    assert body["total"] == 3
+    assert body["matched"] == 3
+    assert [item["tg"] for item in body["items"]] == [9, 214, 21429]
+    assert body["facets"]["continents"]
+
+
+def test_talkgroups_route_filters(server: str):
+    status, body, _ = get_json(f"{server}/api/talkgroups?continent=other")
+    assert status == 200
+    assert {item["tg"] for item in body["items"]} == {9}
+
+
+def test_talkgroups_route_rejects_a_bad_continent(server: str):
+    status, body, _ = get_json(f"{server}/api/talkgroups?continent=mars")
+    assert status == 400
+    assert body["error"]["code"] == "bad_continent"
+
+
 def test_geocode_route(server: str):
     status, body, _ = get_json(f"{server}/api/geocode?q=Malaga&lang=es")
     assert status == 200

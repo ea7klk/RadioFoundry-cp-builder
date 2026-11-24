@@ -687,3 +687,92 @@ select { appearance: auto; }
 }
 .simplex-access { margin-left: 0; }
 .simplex-block code { font-family: var(--font-mono); font-size: 0.76rem; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+
+/* --- talkgroup browser --- */
+.tg-filters {
+	display: grid;
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+	gap: 12px;
+}
+.tg-actions { margin-top: 12px; }
+.tg-table-wrap {
+	margin-top: 14px;
+	max-height: 420px;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+}
+.tg-table { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+.tg-table th, .tg-table td {
+	padding: 7px 10px;
+	text-align: left;
+	border-bottom: 1px solid var(--border);
+	white-space: nowrap;
+	vertical-align: middle;
+}
+.tg-table thead th {
+	position: sticky;
+	top: 0;
+	background: var(--surface-2);
+	font-size: 0.7rem;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--muted);
+	z-index: 1;
+}
+.tg-table tbody tr:hover { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.tg-table tbody tr.chosen { background: var(--accent-soft); }
+.tg-table tbody tr:last-child td { border-bottom: 0; }
+.tg-table td.tg-id { font-family: var(--font-mono); font-variant-numeric: tabular-nums; width: 6.5rem; }
+.tg-table td.tg-name { white-space: normal; max-width: 26rem; }
+.tg-table td.tg-place { color: var(--muted); }
+.tg-check { width: 2.4rem; }
+.tg-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.tg-chosen { margin-top: 14px; }
+.tg-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 6px;
+	/* a country can be fifty contacts: keep the list a panel, not a wall */
+	max-height: 9rem;
+	overflow: auto;
+	padding-right: 4px;
+}
+.tg-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px 4px 10px;
+	border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+	border-radius: 999px;
+	background: var(--accent-soft);
+	color: var(--text);
+	font-size: 0.78rem;
+}
+.tg-chip b { font-family: var(--font-mono); font-weight: 700; color: var(--accent); }
+.tg-chip button {
+	appearance: none;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	font: inherit;
+	line-height: 1;
+	padding: 2px 5px;
+	border-radius: 999px;
+	cursor: pointer;
+}
+.tg-chip button:hover { background: var(--bad-soft); color: var(--bad); }
+
+@media (max-width: 860px) {
+	.tg-filters { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 720px) {
+	.tg-table { font-size: 0.79rem; }
+	.tg-table th, .tg-table td { padding: 6px 7px; }
+	.tg-table td.tg-id { width: 4.2rem; }
+	.tg-table td.tg-name { max-width: 11rem; }
+	.tg-table td.tg-place { white-space: normal; }
+	.tg-chip { font-size: 0.74rem; }
+}

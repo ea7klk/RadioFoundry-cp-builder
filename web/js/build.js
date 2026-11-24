@@ -121,13 +121,14 @@ export function buildCodeplug(input) {
 	const selectedPacks = Array.isArray(input.packs) ? input.packs : [];
 	const selectedDmr = Array.isArray(input.dmr) ? input.dmr : [];
 	const selectedAnalog = Array.isArray(input.analog) ? input.analog : [];
+	const chosenContacts = Array.isArray(input.contacts) ? input.contacts : [];
 	const simplex = input.dmrSimplex && input.dmrSimplex.enabled ? input.dmrSimplex : null;
 
 	if (!validLat(Number(location.lat)) || !validLon(Number(location.lon))) {
 		addError("no_location", "Set your latitude and longitude first.");
 	}
-	if (!selectedPacks.length && !selectedDmr.length && !selectedAnalog.length && !simplex) {
-		addError("nothing_selected", "Select at least one pack, DMR repeater or analog repeater.");
+	if (!selectedPacks.length && !selectedDmr.length && !selectedAnalog.length && !simplex && !chosenContacts.length) {
+		addError("nothing_selected", "Select at least one pack, DMR repeater, analog repeater or contact.");
 	}
 
 	const model = empty();
@@ -186,11 +187,21 @@ export function buildCodeplug(input) {
 		}
 	}
 
+	// A talkgroup selected in the browser will also be a plain contact, with no
+	// slot pinned, so that the repeater's variant has to say which slot it pins.
+	const browsed = new Map();
+	for (const entry of chosenContacts) {
+		const tg = Number(entry && entry.tg);
+		if (tg > 0) browsed.set(tg, String(entry.name || `TG ${tg}`));
+	}
+
 	// The name a contact should carry: plain, unless this talkgroup is used on
-	// more than one slot, in which case each variant says which slot it pins.
+	// more than one slot or also chosen without one, in which case each variant
+	// says which slot it pins.
 	const contactName = (base, slot) => {
 		const slots = slotsByTg.get(base.id) || new Set();
-		return slots.size > 1 && slot ? `${base.name} TS${slot}` : base.name;
+		const ambiguous = slots.size > 1 || browsed.has(Number(base.id));
+		return ambiguous && slot ? `${base.name} TS${slot}` : base.name;
 	};
 
 	// One contact per (call type, number, timeslot override): a group call and
@@ -273,6 +284,32 @@ export function buildCodeplug(input) {
 		});
 		model.channels.push(channel);
 		dmrChannels.push(channel);
+	}
+
+	// Contacts picked in the talkgroup browser: plain group calls with no
+	// timeslot override, since no particular repeater is meant.
+	let browsedContacts = 0;
+	let browsedShared = 0;
+	for (const [tg, name] of browsed) {
+		const existing = model.contacts.find((contact) => contact.id === tg && contact.type === "group" && !contact.timeslot);
+		if (existing) {
+			browsedShared++;
+			continue;
+		}
+		makeContact(name, tg, "group", 0);
+		browsedContacts++;
+	}
+	if (browsedContacts || browsedShared) {
+		const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+		let message;
+		if (browsedContacts) {
+			message = `${plural(browsedContacts, "talkgroup contact")} added from the talkgroup browser, with no timeslot override`;
+			if (browsedShared) message += ` (${browsedShared} ${browsedShared === 1 ? "was" : "were"} already in the contacts table)`;
+			message += ".";
+		} else {
+			message = `No new contact was needed from the talkgroup browser: ${browsedShared} ${browsedShared === 1 ? "was" : "were"} already in the contacts table.`;
+		}
+		addNote("contacts_added", message);
 	}
 
 	const simplexChannels = [];

@@ -23,6 +23,19 @@ const state = {
 	station: { callsign: "", dmrId: "", ssid: 7 },
 	options: { aprsConfig: true, fallbackTg: true },
 	dmrSimplex: { enabled: false, choice: "tg99", includeAccess: false },
+	contacts: {
+		query: "",
+		continent: "all",
+		country: "",
+		items: [],
+		matched: 0,
+		total: 0,
+		truncated: false,
+		loading: false,
+		loaded: false,
+		facets: null,
+		selected: new Map(),
+	},
 	showAllPacks: false,
 	dmr: {
 		radius: 50,
@@ -104,6 +117,8 @@ function saveState() {
 				packs: [...state.packs],
 				showAllPacks: state.showAllPacks,
 				dmrSimplex: state.dmrSimplex,
+				contacts: [...state.contacts.selected].map(([tg, name]) => ({ tg, name })),
+				contactQuery: { query: state.contacts.query, continent: state.contacts.continent, country: state.contacts.country },
 				station: state.station,
 				options: state.options,
 				dmrRadius: state.dmr.radius,
@@ -144,6 +159,17 @@ function loadState() {
 		state.station.ssid = Math.max(0, Math.min(15, Number(saved.station.ssid ?? 7) || 0));
 	}
 	state.showAllPacks = saved.showAllPacks === true;
+	if (Array.isArray(saved.contacts)) {
+		for (const entry of saved.contacts) {
+			const tg = Number(entry?.tg);
+			if (Number.isInteger(tg) && tg > 0) state.contacts.selected.set(tg, String(entry.name || `TG ${tg}`).slice(0, 48));
+		}
+	}
+	if (saved.contactQuery && typeof saved.contactQuery === "object") {
+		state.contacts.query = String(saved.contactQuery.query || "").slice(0, 80);
+		state.contacts.continent = typeof saved.contactQuery.continent === "string" ? saved.contactQuery.continent : "all";
+		state.contacts.country = String(saved.contactQuery.country || "").slice(0, 2);
+	}
 	if (saved.dmrSimplex && typeof saved.dmrSimplex === "object") {
 		state.dmrSimplex.enabled = saved.dmrSimplex.enabled === true;
 		state.dmrSimplex.choice = ["tg99", "all", "both"].includes(saved.dmrSimplex.choice) ? saved.dmrSimplex.choice : "tg99";
@@ -820,6 +846,190 @@ async function loadRepeaterFile(file) {
 	);
 }
 
+// --- DMR contacts: the talkgroup browser ---
+
+const TG_LABEL = {
+	worldwide: "Worldwide",
+	europe: "Europe",
+	"north-america": "North America",
+	"south-america": "South America",
+	asia: "Asia",
+	africa: "Africa",
+	oceania: "Oceania",
+	other: "Other",
+};
+
+function tgPlace(item) {
+	if (item.country_name) return item.country_name;
+	return TG_LABEL[item.continent] || "Other";
+}
+
+function renderContinentOptions(facets) {
+	const select = $("tg-continent");
+	const current = state.contacts.continent;
+	clear(select);
+	select.append(el("option", { value: "all", text: "Every continent" }));
+	for (const entry of facets.continents || []) {
+		if (!entry.count && entry.id !== "other") continue;
+		select.append(el("option", { value: entry.id, text: `${entry.label} (${entry.count})` }));
+	}
+	select.value = current;
+}
+
+function renderCountryOptions(facets) {
+	const select = $("tg-country");
+	const current = state.contacts.country;
+	clear(select);
+	select.append(el("option", { value: "", text: "Every country" }));
+	const countries = (facets.countries || []).filter(
+		(entry) => state.contacts.continent === "all" || entry.continent === state.contacts.continent,
+	);
+	for (const entry of countries) {
+		select.append(el("option", { value: entry.cc, text: `${entry.name} (${entry.count})` }));
+	}
+	select.value = countries.some((entry) => entry.cc === current) ? current : "";
+	state.contacts.country = select.value;
+	select.disabled = countries.length === 0;
+}
+
+async function loadTalkgroups() {
+	if (state.contacts.loading) return;
+	state.contacts.loading = true;
+	const button = $("tg-search");
+	button.disabled = true;
+	button.textContent = "Searching…";
+	try {
+		const data = await api.talkgroups({
+			query: state.contacts.query,
+			continent: state.contacts.continent,
+			country: state.contacts.country,
+			limit: 250,
+		});
+		state.contacts.items = data.items || [];
+		state.contacts.matched = data.matched || 0;
+		state.contacts.total = data.total || 0;
+		state.contacts.truncated = Boolean(data.truncated);
+		state.contacts.facets = data.facets || null;
+		state.contacts.loaded = true;
+		renderTalkgroups();
+		saveState();
+	} catch (error) {
+		$("tg-status").textContent = error.message || "The talkgroup list could not be loaded.";
+	} finally {
+		state.contacts.loading = false;
+		button.disabled = false;
+		button.textContent = "Search talkgroups";
+	}
+}
+
+function renderTalkgroups() {
+	const c = state.contacts;
+	if (c.facets) {
+		renderContinentOptions(c.facets);
+		renderCountryOptions(c.facets);
+	}
+
+	const status = $("tg-status");
+	if (!c.loaded) {
+		status.textContent = "Loading the talkgroup list…";
+		return;
+	}
+	const shown = c.items.length;
+	const selected = c.selected.size;
+	status.textContent =
+		`${c.matched} of ${c.total} talkgroups` +
+		(shown < c.matched ? `, showing the first ${shown}` : "") +
+		` — ${selected} selected`;
+
+	const wrap = $("tg-table-wrap");
+	const rows = $("tg-rows");
+	clear(rows);
+	wrap.hidden = shown === 0;
+	if (!shown) {
+		$("tg-more").hidden = true;
+		renderChosen();
+		return;
+	}
+
+	for (const item of c.items) {
+		const chosen = c.selected.has(item.tg);
+		const box = el("input", {
+			type: "checkbox",
+			"data-tg": String(item.tg),
+			"data-name": item.name,
+			checked: chosen,
+			"aria-label": `Add ${item.name} (TG ${item.tg})`,
+		});
+		rows.append(el(
+			"tr",
+			{ class: chosen ? "chosen" : "" },
+			el("td", { class: "tg-check" }, box),
+			el("td", { class: "tg-id", text: String(item.tg) }),
+			el("td", { class: "tg-name", text: item.name }),
+			el("td", { class: "tg-place", text: tgPlace(item) }),
+		));
+	}
+
+	const allBox = $("tg-all");
+	allBox.checked = shown > 0 && c.items.every((item) => c.selected.has(item.tg));
+	allBox.indeterminate = !allBox.checked && c.items.some((item) => c.selected.has(item.tg));
+
+	const more = $("tg-more");
+	if (c.truncated) {
+		more.hidden = false;
+		more.textContent = `Showing ${shown} of ${c.matched}. Narrow the search with a name, a continent or a country to see the rest.`;
+	} else {
+		more.hidden = true;
+	}
+	renderChosen();
+}
+
+function renderChosen() {
+	const chosen = [...state.contacts.selected].sort((a, b) => a[0] - b[0]);
+	$("tg-count").textContent = String(chosen.length);
+	$("tg-chosen").hidden = chosen.length === 0;
+	const chips = $("tg-chips");
+	clear(chips);
+	for (const [tg, name] of chosen) {
+		const remove = el("button", { type: "button", "aria-label": `Remove ${name}`, text: "×" });
+		remove.addEventListener("click", () => {
+			state.contacts.selected.delete(tg);
+			invalidateBuilt();
+			renderTalkgroups();
+			renderSummary();
+			saveState();
+		});
+		chips.append(el("span", { class: "tg-chip" }, el("b", { text: String(tg) }), name, remove));
+	}
+}
+
+function onTalkgroupToggle(event) {
+	const box = event.target.closest("input[data-tg]");
+	if (!box) return;
+	const tg = Number(box.dataset.tg);
+	if (box.checked) state.contacts.selected.set(tg, box.dataset.name || `TG ${tg}`);
+	else state.contacts.selected.delete(tg);
+	box.closest("tr")?.classList.toggle("chosen", box.checked);
+	invalidateBuilt();
+	renderTalkgroups();
+	renderSummary();
+	saveState();
+}
+
+function onTalkgroupSelectAll() {
+	const box = $("tg-all");
+	const want = box.checked;
+	for (const item of state.contacts.items) {
+		if (want) state.contacts.selected.set(item.tg, item.name);
+		else state.contacts.selected.delete(item.tg);
+	}
+	invalidateBuilt();
+	renderTalkgroups();
+	renderSummary();
+	saveState();
+}
+
+
 // --- build ---
 
 function ensureLocation() {
@@ -861,6 +1071,7 @@ async function buildNow() {
 			packs: [...state.packs],
 			dmr,
 			analog,
+			contacts: [...state.contacts.selected].map(([tg, name]) => ({ tg, name })),
 			dmrSimplex: {
 				enabled: state.dmrSimplex.enabled,
 				plan: "es",
@@ -1012,6 +1223,7 @@ function renderSummary() {
 			]
 		: [
 				["Channels", selectedPackChannels() + state.dmr.selected.size + state.analog.selected.size + simplexDraftCount()],
+				["Contacts", state.contacts.selected.size],
 				["Packs", state.packs.size],
 				["DMR", state.dmr.selected.size],
 				["Analog", state.analog.selected.size],
@@ -1170,6 +1382,10 @@ function resetPage() {
 	state.options = { aprsConfig: true, fallbackTg: true };
 	state.showAllPacks = false;
 	state.dmrSimplex = { enabled: false, choice: "tg99", includeAccess: false };
+	state.contacts.query = "";
+	state.contacts.continent = "all";
+	state.contacts.country = "";
+	state.contacts.selected.clear();
 	state.built = null;
 	clearResults();
 	$("lat").value = "";
@@ -1184,6 +1400,9 @@ function resetPage() {
 	$("pack-all").checked = false;
 	$("simplex-on").checked = false;
 	syncSimplexControls();
+	$("tg-query").value = "";
+	renderChosen();
+	loadTalkgroups();
 	$("country").value = "ES";
 	$("region").value = "R1";
 	$("build-output").replaceChildren();
@@ -1268,6 +1487,37 @@ function wire() {
 		saveState();
 	});
 	$("analog-file").addEventListener("change", (event) => loadRepeaterFile(event.target.files?.[0]));
+	$("tg-search").addEventListener("click", () => {
+		state.contacts.query = $("tg-query").value.trim();
+		loadTalkgroups();
+	});
+	$("tg-query").addEventListener("keydown", (event) => {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			state.contacts.query = $("tg-query").value.trim();
+			loadTalkgroups();
+		}
+	});
+	$("tg-continent").addEventListener("change", () => {
+		state.contacts.continent = $("tg-continent").value;
+		state.contacts.country = "";
+		state.contacts.query = $("tg-query").value.trim();
+		loadTalkgroups();
+	});
+	$("tg-country").addEventListener("change", () => {
+		state.contacts.country = $("tg-country").value;
+		state.contacts.query = $("tg-query").value.trim();
+		loadTalkgroups();
+	});
+	$("tg-all").addEventListener("change", onTalkgroupSelectAll);
+	$("tg-rows").addEventListener("change", onTalkgroupToggle);
+	$("tg-clear").addEventListener("click", () => {
+		state.contacts.selected.clear();
+		invalidateBuilt();
+		renderTalkgroups();
+		renderSummary();
+		saveState();
+	});
 	$("simplex-on").addEventListener("change", onSimplexChange);
 	for (const input of document.querySelectorAll('input[name="simplex-contact"]')) {
 		input.addEventListener("change", onSimplexChange);
@@ -1353,6 +1603,12 @@ async function init() {
 	$("pack-all").checked = state.showAllPacks;
 	$("simplex-on").checked = state.dmrSimplex.enabled;
 	syncSimplexControls();
+	$("tg-query").value = state.contacts.query;
+	renderChosen();
+	if (state.contacts.selected.size) {
+		$("tg-status").textContent = `${state.contacts.selected.size} contact${state.contacts.selected.size === 1 ? "" : "s"} kept from last time; loading the talkgroup list…`;
+	}
+	loadTalkgroups();
 	$("dmr-radius").value = String(state.dmr.radius);
 	$("dmr-radius-out").textContent = `${state.dmr.radius} km`;
 	$("analog-radius").value = String(state.analog.radius);

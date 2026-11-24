@@ -157,6 +157,16 @@ class Handler(BaseHTTPRequestHandler):
                 ),
                 200,
             )
+        if path == "/api/talkgroups":
+            return (
+                self.service.talkgroups(
+                    params["q"] or "",
+                    (params["continent"] or "all").lower(),
+                    (params["country"] or "").upper(),
+                    _int(params["limit"], "limit", 250, 1, 500),
+                ),
+                200,
+            )
         if path == "/api/geocode":
             query_text = params["q"] or ""
             return self.service.geocode(query_text, params["lang"] or "en"), 200
