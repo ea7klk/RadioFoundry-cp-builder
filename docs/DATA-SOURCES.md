@@ -112,9 +112,45 @@ These are compiled data, checked by hand against the primary documents on
 | FRS / GMRS | US FCC, 47 CFR 95 | 22 channels. Channels 8–14 are 0.5 W; 15–22 are shared with GMRS. |
 | Marine VHF | ITU Radio Regulations Appendix 18, as tabulated by the [US Coast Guard](https://www.navcen.uscg.gov/marine-vhf-channels) | Ship (`tx`) and shore (`rx`) frequencies. Channel 70 (DSC) and the 75/76 guard channels are deliberately absent. |
 | NOAA weather | [NOAA NWS](https://www.weather.gov/nwr/) | WX1–WX10, receive only. |
+| DMR simplex (Spain) | [URE / Radio Club Fene, *Frecuencias DMR en simplex en España*](https://www.radioclubfene.net/descargas/frecuencias_dmr.pdf) | 9 voice frequencies and 12 access-point frequencies, CC1, with the channel names the document asks every station to use. See below. |
 
 Frequencies are chosen to sit on the 10 Hz grid the codeplug stores
 (`Math.round(mhz * 1e5) * 10`), so a pack value never rounds silently.
+
+## DMR simplex (Spain)
+
+The document is a national agreement that follows the IARU Region 1 band plan.
+It asks operators to keep its channel names in their codeplugs so a contact can
+say "pásate a SOTA-U" and be understood. The builder therefore never invents a
+name: it uses the published one and appends the contact in use.
+
+| Channel | MHz | Use | CC / slot |
+|---|---|---|---|
+| CQDVHF | 145.375 | VHF calling | 1 / 1 |
+| S1-VHF | 145.3875 | VHF QSO 1 | 1 / 1 |
+| S2-VHF | 145.400 | VHF QSO 2 | 1 / 1 |
+| SOTA-V | 144.900 | VHF SOTA | 1 / 1 |
+| CQDUHF | 433.450 | UHF calling | 1 / 1 |
+| S1-UHF | 433.775 | UHF QSO 1 | 1 / 1 |
+| S2-UHF | 438.025 | UHF QSO 2 (urban) | 1 / 1 |
+| S3-UHF | 438.0375 | UHF QSO 3 (urban) | 1 / 1 |
+| SOTA-U | 438.050 | UHF SOTA | 1 / 1 |
+| PA1-V … PA6-V | 144.8125, 144.825, 144.8375, 144.850, 144.8625, 144.875 | access points | 1 / 2 |
+| PA1-U … PA6-U | 430.400, 430.4125, 430.425, 439.800, 439.8125, 439.825 | access points | 1 / 2 |
+
+The document's own notes, which the builder does not repeat in the codeplug:
+
+- Put a group call to **TG 99 "Simplex"** (ID 99) in the contacts and an RX list
+  holding the simplex channels, associating each channel with TG 99.
+- CC2 is the secondary colour code where signals overlap; the builder always
+  uses CC1, the document's default.
+- PA1-V (144.8125) may be a poor choice where 144.800 APRS is active.
+- An access point is not a repeater: keep DMO power to 5–10 W.
+
+AllCall is offered as an alternative contact because a station calling on a
+simplex frequency has no way to know which TG, if any, a listener is parked on;
+an all call reaches every DMR radio in range. Both is two channels per
+frequency, since a channel carries a single default contact.
 
 ### Deliberate omissions
 

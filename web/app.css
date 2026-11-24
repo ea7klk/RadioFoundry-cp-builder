@@ -642,3 +642,34 @@ select { appearance: auto; }
 @media (prefers-reduced-motion: reduce) {
 	* { scroll-behavior: auto; transition: none !important; }
 }
+
+/* --- DMR simplex block --- */
+.simplex-block {
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px dashed var(--border);
+	display: grid;
+	gap: 10px;
+}
+.simplex-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	margin: 0;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--surface-2);
+	min-inline-size: 0;
+}
+.simplex-options:disabled { opacity: 0.5; }
+.simplex-options legend {
+	padding: 0 6px;
+	font-size: 0.74rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+.simplex-access { margin-left: 0; }
+.simplex-block code { font-family: var(--font-mono); font-size: 0.76rem; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }

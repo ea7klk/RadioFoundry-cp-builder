@@ -10,6 +10,7 @@ import { parseTone, nameBytes } from "../vendor/radiofoundry/codeplug/fields.js"
 import { exportQdmr } from "../vendor/radiofoundry/codeplug/qdmr.js";
 import { exportAll } from "../vendor/radiofoundry/codeplug/csv.js";
 import { PACK_BY_ID, PACK_ORDER, packApplies, packChannels, aprsFrequencyFor } from "./packs.js";
+import { PLAN_BY_ID, planChannels } from "./dmr.js";
 import { latLonToLocator, validLat, validLon } from "./geo.js";
 
 export const CHANNEL_LIMIT = 1024;
@@ -116,11 +117,12 @@ export function buildCodeplug(input) {
 	const selectedPacks = Array.isArray(input.packs) ? input.packs : [];
 	const selectedDmr = Array.isArray(input.dmr) ? input.dmr : [];
 	const selectedAnalog = Array.isArray(input.analog) ? input.analog : [];
+	const simplex = input.dmrSimplex && input.dmrSimplex.enabled ? input.dmrSimplex : null;
 
 	if (!validLat(Number(location.lat)) || !validLon(Number(location.lon))) {
 		addError("no_location", "Set your latitude and longitude first.");
 	}
-	if (!selectedPacks.length && !selectedDmr.length && !selectedAnalog.length) {
+	if (!selectedPacks.length && !selectedDmr.length && !selectedAnalog.length && !simplex) {
 		addError("nothing_selected", "Select at least one pack, DMR repeater or analog repeater.");
 	}
 
@@ -152,6 +154,7 @@ export function buildCodeplug(input) {
 	const usedListNames = new Set();
 	const usedZoneNames = new Set();
 	const contactsByTg = new Map();
+	const contactsByKey = new Map();
 	let foldedNames = 0;
 	let truncatedNames = 0;
 	let badTones = 0;
@@ -162,18 +165,23 @@ export function buildCodeplug(input) {
 		return name;
 	};
 
-	const contactFor = (tg) => {
-		const id = Number(tg.tg);
-		if (contactsByTg.has(id)) return contactsByTg.get(id);
-		const raw = String(tg.name || `TG ${id}`);
-		const name = uniqueName(raw, usedContactNames, 16, `TG ${id}`);
-		if (asciiName(raw, "") !== raw) foldedNames++;
-		if (name.length < asciiName(raw, "").length) truncatedNames++;
-		const contact = newContact({ number: null, name, id, type: "group", timeslot: 0 });
+	// One contact per (call type, number): a group call and an all call to the
+	// same number are different records on the radio.
+	const makeContact = (rawName, number, type) => {
+		const key = `${type}:${number}`;
+		if (contactsByKey.has(key)) return contactsByKey.get(key);
+		const fallback = type === "all" ? "AllCall" : `TG ${number}`;
+		const name = uniqueName(rawName || fallback, usedContactNames, 16, fallback);
+		if (asciiName(rawName || "", "") !== (rawName || "")) foldedNames++;
+		if (name.length < asciiName(rawName || fallback, "").length) truncatedNames++;
+		const contact = newContact({ number: null, name, id: number, type, timeslot: 0 });
 		model.contacts.push(contact);
-		contactsByTg.set(id, contact);
+		contactsByKey.set(key, contact);
+		if (type === "group") contactsByTg.set(number, contact);
 		return contact;
 	};
+
+	const contactFor = (tg) => makeContact(String(tg.name || `TG ${tg.tg}`), Number(tg.tg), "group");
 
 	const tone = (value) => {
 		const parsed = parseTone(value ?? "");
@@ -235,6 +243,59 @@ export function buildCodeplug(input) {
 		});
 		model.channels.push(channel);
 		dmrChannels.push(channel);
+	}
+
+	const simplexChannels = [];
+	const accessChannels = [];
+	if (simplex) {
+		const plan = PLAN_BY_ID.get(simplex.plan || "es");
+		if (!plan) {
+			addWarning("simplex_plan_unknown", `Unknown DMR simplex plan "${simplex.plan}"; no simplex channels were added.`);
+		} else {
+			if (plan.countries?.length && country && !plan.countries.includes(country)) {
+				addWarning(
+					"simplex_country",
+					`${plan.title} is a national agreement for ${plan.countries.join(", ")}; it was added for ${country} anyway.`,
+				);
+			}
+			if (simplex.choice !== "tg99" && simplex.choice !== "all" && simplex.choice !== "both") {
+				addWarning("simplex_contact_unknown", `Unknown DMR simplex contact "${simplex.choice}"; TG 99 was used.`);
+			}
+			const entries = planChannels(plan.id, {
+				choice: simplex.choice === "all" || simplex.choice === "both" ? simplex.choice : "tg99",
+				includeAccess: simplex.includeAccess === true,
+			});
+			for (const entry of entries) {
+				const contact = makeContact(entry.contact.contactName, entry.contact.number, entry.contact.type);
+				const channel = newChannel({
+					number: null,
+					name: cleanChannelName(entry.name, entry.base),
+					rxHz: hz(entry.mhz),
+					txHz: hz(entry.mhz),
+					mode: "dmr",
+					power: 0,
+					colorCode: entry.colorCode,
+					timeslot: entry.timeslot,
+					contact,
+					dmo: true,
+				});
+				model.channels.push(channel);
+				if (entry.kind === "access") accessChannels.push(channel);
+				else simplexChannels.push(channel);
+			}
+			addNote(
+				"simplex_added",
+				`${simplexChannels.length} DMR simplex channel${simplexChannels.length === 1 ? "" : "s"} from the ${plan.title} plan` +
+					(accessChannels.length ? `, plus ${accessChannels.length} access-point channel${accessChannels.length === 1 ? "" : "s"}` : "") +
+					` (${simplex.choice === "both" ? "TG 99 and AllCall" : simplex.choice === "all" ? "AllCall" : "TG 99"}).`,
+			);
+			if (simplex.choice === "both") {
+				addNote(
+					"simplex_both",
+					`Each simplex frequency is two channels, one on TG 99 and one on AllCall, because a channel holds a single contact; the name says which.`,
+				);
+			}
+		}
 	}
 
 	const seenAnalog = new Set();
@@ -332,6 +393,8 @@ export function buildCodeplug(input) {
 		}
 	};
 	addZones("DMR", dmrChannels);
+	addZones("DMR SIMPLEX", simplexChannels);
+	addZones("DMR ACCESS", accessChannels);
 	addZones("ANALOG", analogChannels);
 	addZones("STANDARD", standardChannels.filter((channel) => !aprsChannels.some((entry) => entry.channel === channel)));
 	addZones("APRS", aprsChannels.map((entry) => entry.channel));
@@ -369,6 +432,8 @@ export function buildCodeplug(input) {
 	const summary = {
 		channels: model.channels.length,
 		dmr: dmrChannels.length,
+		dmrSimplex: simplexChannels.length,
+		dmrAccess: accessChannels.length,
 		analog: analogChannels.length,
 		standard: standardChannels.length,
 		contacts: model.contacts.length,

@@ -45,12 +45,17 @@ The order of operations is what makes the output predictable:
 1. **DMR repeaters**, in the order the user selected them. Each one's talkgroups
    create contacts the first time they are seen; a talkgroup shared by two
    repeaters is one contact.
-2. **Analog repeaters**, in list order.
-3. **Channel packs**, in `PACK_ORDER` (calling, licence-exempt, marine, APRS), so
+2. **DMR simplex channels**, from the selected plan: voice channels first, then
+   access points if asked for, and per frequency one channel per chosen contact
+   (TG 99, AllCall, or both). The plan's own channel names are kept and the
+   contact is appended, so the name is the record of what the channel does.
+3. **Analog repeaters**, in list order.
+4. **Channel packs**, in `PACK_ORDER` (calling, licence-exempt, marine, APRS), so
    APRS channels are last and easy to find.
-4. **APRS configuration**, pointing at the APRS frequency for the chosen region
+5. **APRS configuration**, pointing at the APRS frequency for the chosen region
    and country, or the first APRS channel if that frequency is not in the pack.
-5. **Zones**, one per group, split at 80 channels, with the DMR zone first.
+6. **Zones**, one per group, split at 80 channels, with the DMR zone first, then
+   `DMR SIMPLEX`, `DMR ACCESS` and the rest.
 
 Names are made unique as they are assigned, in that order: the first record to
 claim a name keeps it and later ones get ` 2`, ` 3`, … The radio's 16-character
@@ -77,6 +82,10 @@ is applied without a line here.
   regions, countries and `channels()`, add it to `PACK_ORDER`, and pin its
   values in `tests/packs.test.mjs`. If it is country-specific, add the country
   to `COUNTRIES` if it is missing.
+- **A new DMR simplex plan**: add an entry to `PLANS` in `web/js/dmr.js` with its
+  `simplex` and `access` tables, and pin its frequencies and names in
+  `tests/dmr.test.mjs`. Keep the published names; the contact is appended by
+  `planChannels`.
 - **A new repeater source**: a module in `server/` that normalises to the shapes
   in `brandmeister.py` / `hearham.py`, a route in `server/app.py`, and a section
   in `web/index.html`. Keep `downlink_mhz` (the user's RX) and `uplink_mhz` (the

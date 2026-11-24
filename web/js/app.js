@@ -9,6 +9,7 @@ import { COUNTRIES, COUNTRY_BY_CC, PACKS, PACK_BY_ID, REGIONS, defaultPacks, pac
 import { distanceKm, formatKm, formatLatLon, formatMHz, latLonToLocator, locatorToLatLon, validLat, validLon } from "./geo.js";
 import { makeZip } from "./zip.js";
 import { parseRepeaterFile } from "./repeaters.js";
+import { planChannels } from "./dmr.js";
 
 const STORAGE_KEY = "cpb.state.v1";
 const $ = (id) => document.getElementById(id);
@@ -21,6 +22,7 @@ const state = {
 	packs: new Set(),
 	station: { callsign: "", dmrId: "", ssid: 7 },
 	options: { aprsConfig: true, fallbackTg: true },
+	dmrSimplex: { enabled: false, choice: "tg99", includeAccess: false },
 	showAllPacks: false,
 	dmr: {
 		radius: 50,
@@ -100,6 +102,7 @@ function saveState() {
 				region: state.region,
 				packs: [...state.packs],
 				showAllPacks: state.showAllPacks,
+				dmrSimplex: state.dmrSimplex,
 				station: state.station,
 				options: state.options,
 				dmrRadius: state.dmr.radius,
@@ -139,6 +142,11 @@ function loadState() {
 		state.station.ssid = Math.max(0, Math.min(15, Number(saved.station.ssid ?? 7) || 0));
 	}
 	state.showAllPacks = saved.showAllPacks === true;
+	if (saved.dmrSimplex && typeof saved.dmrSimplex === "object") {
+		state.dmrSimplex.enabled = saved.dmrSimplex.enabled === true;
+		state.dmrSimplex.choice = ["tg99", "all", "both"].includes(saved.dmrSimplex.choice) ? saved.dmrSimplex.choice : "tg99";
+		state.dmrSimplex.includeAccess = saved.dmrSimplex.includeAccess === true;
+	}
 	if (saved.options && typeof saved.options === "object") {
 		state.options.aprsConfig = saved.options.aprsConfig !== false;
 		state.options.fallbackTg = saved.options.fallbackTg !== false;
@@ -721,6 +729,26 @@ function renderAnalogResults() {
 	}
 }
 
+function syncSimplexControls() {
+	const on = state.dmrSimplex.enabled;
+	$("simplex-options").disabled = !on;
+	$("simplex-access").disabled = !on;
+	for (const input of document.querySelectorAll('input[name="simplex-contact"]')) {
+		input.checked = input.value === state.dmrSimplex.choice;
+	}
+	$("simplex-access").checked = state.dmrSimplex.includeAccess;
+}
+
+function onSimplexChange() {
+	state.dmrSimplex.enabled = $("simplex-on").checked;
+	const picked = document.querySelector('input[name="simplex-contact"]:checked');
+	if (picked) state.dmrSimplex.choice = picked.value;
+	state.dmrSimplex.includeAccess = $("simplex-access").checked;
+	syncSimplexControls();
+	invalidateBuilt();
+	saveState();
+}
+
 // --- a repeater list from a file ---
 
 async function loadRepeaterFile(file) {
@@ -813,6 +841,12 @@ async function buildNow() {
 			packs: [...state.packs],
 			dmr,
 			analog,
+			dmrSimplex: {
+				enabled: state.dmrSimplex.enabled,
+				plan: "es",
+				choice: state.dmrSimplex.choice,
+				includeAccess: state.dmrSimplex.includeAccess,
+			},
 			options: {
 				aprsConfig: $("aprs-config").checked && !$("aprs-config").disabled,
 				aprsSsid: Number($("aprs-ssid").value),
@@ -850,6 +884,7 @@ function renderBuild() {
 			["RX lists", result.summary.rxLists],
 			["Zones", result.summary.zones],
 			["DMR", result.summary.dmr],
+			["Simplex", result.summary.dmrSimplex],
 			["Analog", result.summary.analog],
 		]) {
 			metrics.append(el("div", { class: "metric" }, el("b", { text: String(value) }), el("span", { text: label })));
@@ -920,6 +955,15 @@ function selectedPackChannels() {
 	return channels;
 }
 
+// The same plan data the build uses, so the draft count cannot drift from it.
+function simplexDraftCount() {
+	if (!state.dmrSimplex.enabled) return 0;
+	return planChannels("es", {
+		choice: state.dmrSimplex.choice,
+		includeAccess: state.dmrSimplex.includeAccess,
+	}).length;
+}
+
 function renderSummary() {
 	const result = state.built;
 	const locationNode = $("summary-location");
@@ -938,10 +982,11 @@ function renderSummary() {
 				["RX lists", result.summary.rxLists],
 				["Zones", result.summary.zones],
 				["DMR", result.summary.dmr],
+				["Simplex", result.summary.dmrSimplex],
 				["Analog", result.summary.analog],
 			]
 		: [
-				["Channels", selectedPackChannels() + state.dmr.selected.size + state.analog.selected.size],
+				["Channels", selectedPackChannels() + state.dmr.selected.size + state.analog.selected.size + simplexDraftCount()],
 				["Packs", state.packs.size],
 				["DMR", state.dmr.selected.size],
 				["Analog", state.analog.selected.size],
@@ -1099,6 +1144,7 @@ function resetPage() {
 	state.station = { callsign: "", dmrId: "", ssid: 7 };
 	state.options = { aprsConfig: true, fallbackTg: true };
 	state.showAllPacks = false;
+	state.dmrSimplex = { enabled: false, choice: "tg99", includeAccess: false };
 	state.built = null;
 	clearResults();
 	$("lat").value = "";
@@ -1111,6 +1157,8 @@ function resetPage() {
 	$("aprs-config").checked = true;
 	$("dmr-fallback").checked = true;
 	$("pack-all").checked = false;
+	$("simplex-on").checked = false;
+	syncSimplexControls();
 	$("country").value = "ES";
 	$("region").value = "R1";
 	$("build-output").replaceChildren();
@@ -1192,6 +1240,11 @@ function wire() {
 		saveState();
 	});
 	$("analog-file").addEventListener("change", (event) => loadRepeaterFile(event.target.files?.[0]));
+	$("simplex-on").addEventListener("change", onSimplexChange);
+	for (const input of document.querySelectorAll('input[name="simplex-contact"]')) {
+		input.addEventListener("change", onSimplexChange);
+	}
+	$("simplex-access").addEventListener("change", onSimplexChange);
 	$("dmr-search").addEventListener("click", searchDmr);
 	$("analog-search").addEventListener("click", searchAnalog);
 	$("dmr-fallback").addEventListener("change", () => {
@@ -1262,6 +1315,8 @@ async function init() {
 	$("aprs-config").checked = state.options.aprsConfig;
 	$("dmr-fallback").checked = state.options.fallbackTg;
 	$("pack-all").checked = state.showAllPacks;
+	$("simplex-on").checked = state.dmrSimplex.enabled;
+	syncSimplexControls();
 	$("dmr-radius").value = String(state.dmr.radius);
 	$("dmr-radius-out").textContent = `${state.dmr.radius} km`;
 	$("analog-radius").value = String(state.analog.radius);

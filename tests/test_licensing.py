@@ -53,16 +53,36 @@ def test_the_project_licence_keeps_the_upstream_notice():
     assert "The RadioFoundry Authors" in licence
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        *sorted((ROOT / "server").glob("*.py")),
-        *sorted((ROOT / "tests").glob("*.py")),
-        ROOT / "Makefile",
-        ROOT / "Dockerfile",
-    ],
-    ids=lambda path: str(Path(path).relative_to(ROOT)),
-)
+# Every source file the project owns. The upstream files under web/vendor are
+# checked by the notice tests above; LICENSE, NOTICE, package.json and the icon
+# carry their licence in another way and are checked separately.
+def project_files() -> list[Path]:
+    files: list[Path] = [ROOT / "Makefile", ROOT / "Dockerfile", ROOT / "README.md", ROOT / "NOTICE", ROOT / "docker-compose.yml"]
+    for pattern in ("server/*.py", "tests/*.py", "web/js/*.js", "web/*.html", "web/*.css", "docs/*.md", ".github/workflows/*.yml", ".gitignore", ".dockerignore", "pytest.ini"):
+        files.extend(sorted(ROOT.glob(pattern)))
+    return files
+
+
+@pytest.mark.parametrize("path", project_files(), ids=lambda path: str(Path(path).relative_to(ROOT)))
 def test_project_files_carry_an_spdx_line(path: Path):
-    head = path.read_text(encoding="utf-8").splitlines()[:2]
-    assert any("SPDX-License-Identifier: MIT" in line for line in head), f"{path} has no SPDX line"
+    head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:3])
+    assert "SPDX-License-Identifier: MIT" in head, f"{path} has no SPDX line"
+
+
+def test_package_manifest_declares_the_licence():
+    import json
+
+    manifest = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert manifest["license"] == "MIT"
+
+
+def test_the_notice_credits_upstream_and_the_data_sources():
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+    assert "MIT" in notice
+    assert "RadioFoundry/RadioFoundry" in notice
+    assert "docs/DATA-SOURCES.md" in notice
+
+
+def test_the_container_image_declares_its_licence():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert 'org.opencontainers.image.licenses="MIT"' in dockerfile

@@ -152,6 +152,35 @@
 					</div>
 					<p id="dmr-status" class="status" aria-live="polite"></p>
 					<div id="dmr-results" class="results"></div>
+
+					<div class="simplex-block">
+						<label class="check">
+							<input id="simplex-on" type="checkbox">
+							<span>Add DMR simplex channels <span class="badge">Spain</span></span>
+						</label>
+						<fieldset id="simplex-options" class="simplex-options" disabled>
+							<legend>Default contact</legend>
+							<label class="check">
+								<input type="radio" name="simplex-contact" value="tg99" checked>
+								<span>TG 99 (Simplex)</span>
+							</label>
+							<label class="check">
+								<input type="radio" name="simplex-contact" value="all">
+								<span>AllCall (16777215)</span>
+							</label>
+							<label class="check">
+								<input type="radio" name="simplex-contact" value="both">
+								<span>Both — two channels per frequency</span>
+							</label>
+						</fieldset>
+						<label class="check simplex-access">
+							<input id="simplex-access" type="checkbox" disabled>
+							<span>Include the access-point (gateway) frequencies</span>
+						</label>
+						<p class="hint small" id="simplex-note">
+							The national Spanish DMR simplex plan (URE / Radio Club Fene) on the IARU Region 1 band plan: 145.375 and 433.450 calling, QSO channels, SOTA, CC1 slot 1. Channel names follow the plan so a contact can agree a QSY by name; the contact in use is appended, as in <code>SOTA-U TG99</code>
+						</p>
+					</div>
 				</div>
 			</section>
 

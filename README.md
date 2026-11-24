@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Copyright (c) 2026 The RadioFoundry-cp-builder Authors -->
+
 # RadioFoundry CP Builder
 
 A location-aware codeplug builder for [RadioFoundry](https://radiofoundry.org/) radios.
@@ -15,6 +18,9 @@ Set a location — coordinates, a Maidenhead locator or a nearby city — then a
 - **Nearby analog repeaters**, from the HearHam open database, with the
   repeater's shift and its CTCSS/DCS tones — or from a repeater list you
   already have, as CSV or JSON, read in the browser.
+- **DMR simplex channels** on the Spanish national plan, as a group call to
+  **TG 99**, an **AllCall** to 16777215, or **both** — with a channel name that
+  says which.
 
 The result is a **qDMR YAML** file and a **CSV table set** that the official
 [RadioFoundry codeplug editor](https://radiofoundry.org/codeplug/index.html)
@@ -67,6 +73,7 @@ node --test "tests/*.test.mjs" # builder: packs, model, YAML and CSV round trips
 | DMR repeater | one per repeater, RX = repeater TX | every static talkgroup, shared across repeaters | one per repeater, named after its callsign | `DMR` |
 | Analog repeater | one per repeater, with TX/RX tone | — | — | `ANALOG` |
 | Your own list (CSV/JSON) | one per row, with TX/RX tone | — | — | `ANALOG` |
+| DMR simplex plan | one per frequency and contact, talkaround, CC1 | TG 99 and/or AllCall | — | `DMR SIMPLEX` (+ `DMR ACCESS`) |
 | Channel packs | one per frequency or channel | — | — | `STANDARD` |
 | APRS pack plus a callsign | the APRS frequency as an FM channel | — | — | `APRS` |
 
@@ -106,6 +113,36 @@ you ask to see them, and selecting one adds a warning to the build.
 
 Details, including what each source says and where its data is thin, are in
 [docs/DATA-SOURCES.md](docs/DATA-SOURCES.md).
+
+### DMR simplex
+
+The DMR simplex option follows the Spanish national agreement
+([URE / Radio Club Fene](https://www.radioclubfene.net/descargas/frecuencias_dmr.pdf)),
+which fixes both the frequencies and the names everyone should use, so two
+stations can agree a QSY by name:
+
+```
+CQDVHF   145.375    VHF calling
+S1-VHF   145.3875   VHF QSO 1        S2-VHF   145.400   VHF QSO 2
+SOTA-V   144.900    VHF SOTA
+CQDUHF   433.450    UHF calling
+S1-UHF   433.775    UHF QSO 1        S2-UHF   438.025   UHF QSO 2
+S3-UHF   438.0375   UHF QSO 3        SOTA-U   438.050   UHF SOTA
+```
+
+All on colour code 1, slot 1, talkaround (RX = TX). The default contact is your
+choice of:
+
+- **TG 99** — the Brandmeister simplex talkgroup, a group call to 99;
+- **AllCall** — a call to 16777215, which every listening radio hears;
+- **both** — two channels per frequency, because a channel holds only one
+  contact. The contact is appended to the name (`CQDVHF TG99`, `CQDVHF ALL`), so
+  the channel list shows at a glance which one transmits.
+
+The optional **access-point** frequencies (PA1-V … PA6-U, 144.8125–144.875 and
+430.400–439.825) are the over-the-air gateways the same document defines; they
+sit on slot 2 and get their own `DMR ACCESS` zone. The plan is Spain's: using it
+with another country selected adds a warning rather than stopping you.
 
 ### Your own repeater list
 
@@ -174,6 +211,7 @@ server/          Python 3.11+ service, standard library only
 web/             the page, no build step and no dependencies
   js/build.js    choices -> RadioFoundry model -> YAML and CSV
   js/packs.js    frequency data and IARU/country rules
+  js/dmr.js      DMR simplex plans and the TG 99 / AllCall choice
   js/repeaters.js  a user's own repeater list (CSV or JSON)
   js/geo.js      locators, distances, formatting
   js/app.js      state, rendering, downloads

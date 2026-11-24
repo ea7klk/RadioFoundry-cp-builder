@@ -322,3 +322,99 @@ test("the zip writer makes an archive with the right checksums", () => {
 	assert.equal(view.getUint32(14, true), crc32(encoder.encode(files[0].text)));
 	assert.equal(view.getUint32(18, true), encoder.encode(files[0].text).length);
 });
+
+// --- DMR simplex ---
+
+const simplex = (overrides = {}) => ({ enabled: true, plan: "es", choice: "tg99", includeAccess: false, ...overrides });
+
+test("DMR simplex channels are built on the chosen talkgroup", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex(), options: { aprsConfig: false } }));
+	assert.equal(result.ok, true, JSON.stringify(result.errors));
+	assert.equal(result.summary.dmrSimplex, 9);
+	const calling = result.model.channels.find((channel) => channel.name === "CQDVHF TG99");
+	assert.ok(calling);
+	assert.equal(calling.mode, "dmr");
+	assert.equal(calling.rxHz, 145_375_000);
+	assert.equal(calling.txHz, 145_375_000);
+	assert.equal(calling.colorCode, 1);
+	assert.equal(calling.timeslot, 1);
+	assert.equal(calling.dmo, true);
+	assert.equal(calling.contact.id, 99);
+	assert.equal(calling.contact.type, "group");
+	assert.equal(calling.contact.name, "Simplex");
+	assert.deepEqual(result.model.zones.map((zone) => zone.name), ["DMR SIMPLEX"]);
+});
+
+test("AllCall uses the 24-bit all-call id and the all call type", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ choice: "all" }), options: { aprsConfig: false } }));
+	const channel = result.model.channels[0];
+	assert.equal(channel.name, "CQDVHF ALL");
+	assert.equal(channel.contact.id, 0xffffff);
+	assert.equal(channel.contact.type, "all");
+	assert.equal(channel.contact.name, "AllCall");
+	assert.equal(result.model.contacts.length, 1);
+});
+
+test("both gives two channels per frequency, each naming its contact", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ choice: "both" }), options: { aprsConfig: false } }));
+	assert.equal(result.summary.dmrSimplex, 18);
+	const names = result.model.channels.map((channel) => channel.name);
+	assert.ok(names.includes("SOTA-U TG99"));
+	assert.ok(names.includes("SOTA-U ALL"));
+	assert.equal(result.model.contacts.length, 2);
+	const tg = result.model.channels.find((channel) => channel.name === "SOTA-U TG99");
+	const all = result.model.channels.find((channel) => channel.name === "SOTA-U ALL");
+	assert.equal(tg.rxHz, all.rxHz);
+	assert.equal(tg.contact.id, 99);
+	assert.equal(all.contact.id, 0xffffff);
+	assert.ok(result.notes.some((note) => note.code === "simplex_both"));
+});
+
+test("access-point frequencies are optional and sit on slot 2", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ includeAccess: true }), options: { aprsConfig: false } }));
+	assert.equal(result.summary.dmrAccess, 12);
+	const access = result.model.channels.find((channel) => channel.name === "PA1-V TG99");
+	assert.equal(access.rxHz, 144_812_500);
+	assert.equal(access.timeslot, 2);
+	assert.deepEqual(result.model.zones.map((zone) => zone.name), ["DMR SIMPLEX", "DMR ACCESS"]);
+});
+
+test("simplex channels survive the YAML round trip with their contact type", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ choice: "both", includeAccess: true }), options: { aprsConfig: false } }));
+	const model = empty();
+	importQdmr(model, result.yaml);
+	assert.equal(model.channels.length, 42);
+	const all = model.channels.find((channel) => channel.name === "CQDUHF ALL");
+	assert.equal(all.contact.type, "all");
+	assert.equal(all.contact.id, 0xffffff);
+	assert.equal(all.dmo, true);
+	assert.equal(all.rxHz, 433_450_000);
+	const access = model.channels.find((channel) => channel.name === "PA6-U TG99");
+	assert.equal(access.timeslot, 2);
+});
+
+test("simplex channels survive the CSV round trip", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ choice: "both" }), options: { aprsConfig: false } }));
+	const model = empty();
+	const { results } = importAll(model, result.csvFiles.map((file) => ({ name: file.name, text: file.text })));
+	assert.deepEqual(results.find((entry) => entry.table === "channels").problems, []);
+	assert.equal(model.channels.length, 18);
+	assert.equal(model.contacts.find((contact) => contact.type === "all").id, 0xffffff);
+});
+
+test("the Spanish plan used outside Spain is flagged", () => {
+	const result = buildCodeplug(base({ country: "DE", packs: [], dmr: [], analog: [], dmrSimplex: simplex(), options: { aprsConfig: false } }));
+	assert.ok(result.warnings.some((warning) => warning.code === "simplex_country"));
+});
+
+test("simplex alone is a complete request", () => {
+	const result = buildCodeplug({ location: MALAGA, country: "ES", region: "R1", station: {}, packs: [], dmr: [], analog: [], dmrSimplex: simplex(), options: { aprsConfig: false } });
+	assert.equal(result.ok, true);
+	assert.equal(result.model.channels.length, 9);
+});
+
+test("an unknown simplex contact falls back to TG 99 and says so", () => {
+	const result = buildCodeplug(base({ packs: [], dmr: [], analog: [], dmrSimplex: simplex({ choice: "nonsense" }), options: { aprsConfig: false } }));
+	assert.equal(result.model.channels[0].contact.id, 99);
+	assert.ok(result.warnings.some((warning) => warning.code === "simplex_contact_unknown"));
+});

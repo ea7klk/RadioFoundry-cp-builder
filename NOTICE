@@ -1,0 +1,26 @@
+SPDX-License-Identifier: MIT
+
+RadioFoundry CP Builder
+Copyright (c) 2026 The RadioFoundry-cp-builder Authors
+
+This product is MIT licensed; the full text is in LICENSE.
+
+It is an independent project, not an official RadioFoundry release. It is
+based on RadioFoundry (https://github.com/RadioFoundry/RadioFoundry), which is
+MIT licensed:
+
+  Copyright (c) 2026 The RadioFoundry Authors (see AUTHORS)
+
+Code copied from RadioFoundry is vendored, unmodified except for the path it
+lives at, under web/vendor/radiofoundry/. The upstream LICENSE, AUTHORS and
+CONTRIBUTORS files are kept there, and each vendored file keeps its own SPDX
+line and copyright notice. web/vendor/radiofoundry/VENDOR.md records what was
+copied, why, and from which upstream commit.
+
+Third-party data and services are credited in docs/DATA-SOURCES.md
+(Brandmeister, HearHam, OpenStreetMap Nominatim, and the IARU, CEPT, FCC, ITU,
+NOAA and URE/Radio Club Fene documents the frequency tables come from).
+
+That list is credit, not a licence grant: the frequency tables in
+web/js/packs.js and web/js/dmr.js are this project's own compilation of
+published figures, and the live data is used under each service's terms.
