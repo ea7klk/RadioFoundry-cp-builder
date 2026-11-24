@@ -44,12 +44,13 @@ export const api = {
 	bmNearby: ({ lat, lon, radius, limit = 300 }) =>
 		getJSON("/api/bm/repeaters", { lat, lon, radius, limit }),
 	bmTalkgroups: (id) => getJSON(`/api/bm/devices/${encodeURIComponent(id)}/talkgroups`),
-	analogNearby: ({ lat, lon, radius, limit = 300, tonedOnly = false, includeSimplex = false }) =>
+	analogNearby: ({ lat, lon, radius, limit = 300, tonedOnly = false, includeSimplex = false, band = "all" }) =>
 		getJSON("/api/repeaters/analog", {
 			lat,
 			lon,
 			radius,
 			limit,
+			band,
 			toned_only: tonedOnly ? 1 : 0,
 			include_simplex: includeSimplex ? 1 : 0,
 		}),

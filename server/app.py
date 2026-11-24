@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import __version__
 from .config import Config
-from .service import BadRequest, NotFound, Service, _bool, _float, _int, parse_params
+from .service import SOURCES, BadRequest, NotFound, Service, _bool, _float, _int, parse_params
 from .upstream import UpstreamError
 
 WEB_ROOT = (Path(__file__).resolve().parent.parent / "web").resolve()
@@ -53,6 +53,16 @@ SECURITY_HEADERS = {
 }
 
 API_TALKGROUP = re.compile(r"^/api/bm/devices/(\d{1,7})/talkgroups$")
+
+
+def _sources(value: str | None) -> tuple[str, ...]:
+    """``sources=ure,hearham``; the default is every source, URE first."""
+    if not value:
+        return SOURCES
+    wanted = tuple(part.strip().lower() for part in value.split(",") if part.strip())
+    if not wanted or any(name not in SOURCES for name in wanted):
+        raise BadRequest("bad_sources", f"sources must be a comma-separated list of {', '.join(SOURCES)}")
+    return tuple(name for name in SOURCES if name in wanted)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -142,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
                     _int(params["limit"], "limit", 200, 1, 500),
                     include_simplex=_bool(params["include_simplex"]),
                     toned_only=_bool(params["toned_only"]),
+                    band=(params["band"] or "all").lower(),
+                    sources=_sources(params["sources"]),
                 ),
                 200,
             )

@@ -28,3 +28,11 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def round_km(value: float) -> float:
     return round(value, 2)
+
+
+# Repeaters are VHF below 300 MHz (6 m, 4 m, 2 m) and UHF above it (70 cm, 23 cm).
+VHF_MAX_MHZ = 300.0
+
+
+def band_of(mhz: float) -> str:
+    return "vhf" if mhz < VHF_MAX_MHZ else "uhf"

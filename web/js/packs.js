@@ -106,9 +106,10 @@ const FRS = [
 	462.55, 462.575, 462.6, 462.625, 462.65, 462.675, 462.7, 462.725,
 ].map((mhz, i) => fm(`FRS${String(i + 1).padStart(2, "0")}`, mhz, { bw: 12.5 }));
 
-// [channel name, ship transmit MHz, shore transmit MHz]. From ITU Appendix 18
+// [channel number, ship transmit MHz, shore transmit MHz]. From ITU Appendix 18
 // as tabulated by the US Coast Guard; channel 70 (DSC) and the 75/76 guard
-// channels are deliberately absent.
+// channels are deliberately absent. The codeplug name is prefixed MAR- so a
+// marine channel is recognisable next to the amateur and licence-exempt ones.
 const MARINE = [
 	["M1", 156.05, 160.65], ["M2", 156.1, 160.7], ["M3", 156.15, 160.75], ["M4", 156.2, 160.8],
 	["M5", 156.25, 160.85], ["M6", 156.3, 156.3], ["M7", 156.35, 160.95], ["M8", 156.4, 156.4],
@@ -125,7 +126,7 @@ const MARINE = [
 	["M79", 156.975, 161.575], ["M80", 157.025, 161.625], ["M81", 157.075, 161.675], ["M82", 157.125, 161.725],
 	["M83", 157.175, 161.775], ["M84", 157.225, 161.825], ["M85", 157.275, 161.875], ["M86", 157.325, 161.925],
 	["M87", 157.375, 157.375], ["M88", 157.425, 157.425],
-].map(([name, ship, shore]) => ({ name, rx: shore, tx: ship, bw: 25, mode: "fm", power: 0 }));
+].map(([channel, ship, shore]) => ({ name: `MAR-${channel.replace(/^M/, "")}`, rx: shore, tx: ship, bw: 25, mode: "fm", power: 0 }));
 
 const WX = [
 	["WX1", 162.55], ["WX2", 162.4], ["WX3", 162.475], ["WX4", 162.425], ["WX5", 162.45],

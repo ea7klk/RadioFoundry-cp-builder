@@ -22,6 +22,10 @@ export const ZONE_CHANNELS = 80;
 
 const hz = (mhz) => Math.round(Number(mhz) * 1e5) * 10;
 
+// A Brandmeister talkgroup slot: 1 or 2, anything else (0, null, a string) is
+// "no override" — the channel's own slot decides.
+const slugSlot = (value) => (Number(value) === 1 || Number(value) === 2 ? Number(value) : 0);
+
 // ASCII, no combining marks: the radio's name field is Latin-1 and a DMR
 // contact name that crosses the radio's font would arrive as question marks.
 export function asciiName(value, fallback = "") {
@@ -153,8 +157,8 @@ export function buildCodeplug(input) {
 	const usedContactNames = new Set();
 	const usedListNames = new Set();
 	const usedZoneNames = new Set();
-	const contactsByTg = new Map();
 	const contactsByKey = new Map();
+	let timeslotOverrides = 0;
 	let foldedNames = 0;
 	let truncatedNames = 0;
 	let badTones = 0;
@@ -165,23 +169,49 @@ export function buildCodeplug(input) {
 		return name;
 	};
 
-	// One contact per (call type, number): a group call and an all call to the
-	// same number are different records on the radio.
-	const makeContact = (rawName, number, type) => {
-		const key = `${type}:${number}`;
+	// Brandmeister publishes the slot each static talkgroup is subscribed to on
+	// each repeater. That slot becomes the contact's timeslot override, so the
+	// talkgroup always goes out on the slot its repeater listens on, whatever
+	// the channel's own slot is. A talkgroup used on two slots needs two contact
+	// records: a contact holds one override.
+	const slotsByTg = new Map();
+	for (const repeater of Array.isArray(input.dmr) ? input.dmr : []) {
+		if (!repeater || !Array.isArray(repeater.talkgroups)) continue;
+		for (const tg of repeater.talkgroups) {
+			const id = Number(tg?.tg);
+			const slot = slugSlot(tg?.slot);
+			if (!(id > 0) || !slot) continue;
+			if (!slotsByTg.has(id)) slotsByTg.set(id, new Set());
+			slotsByTg.get(id).add(slot);
+		}
+	}
+
+	// The name a contact should carry: plain, unless this talkgroup is used on
+	// more than one slot, in which case each variant says which slot it pins.
+	const contactName = (base, slot) => {
+		const slots = slotsByTg.get(base.id) || new Set();
+		return slots.size > 1 && slot ? `${base.name} TS${slot}` : base.name;
+	};
+
+	// One contact per (call type, number, timeslot override): a group call and
+	// an all call to the same number are different records on the radio, and so
+	// are the same talkgroup pinned to TS1 and to TS2.
+	const makeContact = (rawName, number, type, slot = 0) => {
+		const override = slugSlot(slot);
+		const key = `${type}:${number}:${override}`;
 		if (contactsByKey.has(key)) return contactsByKey.get(key);
 		const fallback = type === "all" ? "AllCall" : `TG ${number}`;
-		const name = uniqueName(rawName || fallback, usedContactNames, 16, fallback);
+		const name = uniqueName(contactName({ name: rawName || fallback, id: number }, override), usedContactNames, 16, fallback);
 		if (asciiName(rawName || "", "") !== (rawName || "")) foldedNames++;
 		if (name.length < asciiName(rawName || fallback, "").length) truncatedNames++;
-		const contact = newContact({ number: null, name, id: number, type, timeslot: 0 });
+		const contact = newContact({ number: null, name, id: number, type, timeslot: override });
+		if (override) timeslotOverrides++;
 		model.contacts.push(contact);
 		contactsByKey.set(key, contact);
-		if (type === "group") contactsByTg.set(number, contact);
 		return contact;
 	};
 
-	const contactFor = (tg) => makeContact(String(tg.name || `TG ${tg.tg}`), Number(tg.tg), "group");
+	const contactFor = (tg) => makeContact(String(tg.name || `TG ${tg.tg}`), Number(tg.tg), "group", tg.slot);
 
 	const tone = (value) => {
 		const parsed = parseTone(value ?? "");
@@ -344,6 +374,19 @@ export function buildCodeplug(input) {
 		if (String(spec.pack || "").startsWith("aprs_")) aprsChannels.push({ channel, spec });
 	}
 
+	if (timeslotOverrides) {
+		addNote(
+			"timeslot_overrides",
+			`${timeslotOverrides} talkgroup contact${timeslotOverrides === 1 ? " carries" : "s carry"} the timeslot override Brandmeister publishes for ${timeslotOverrides === 1 ? "it" : "them"} on the selected repeater${timeslotOverrides === 1 ? "" : "s"}.`,
+		);
+		const split = [...slotsByTg.entries()].filter(([, slots]) => slots.size > 1);
+		if (split.length) {
+			addNote(
+				"timeslot_split",
+				`${split.length} talkgroup${split.length === 1 ? " is" : "s are"} used on both slots by the selected repeaters, so there is one contact per slot, named TS1 and TS2.`,
+			);
+		}
+	}
 	if (foldedNames) addWarning("names_folded", `${foldedNames} talkgroup name(s) lost non-ASCII characters the radio cannot show.`);
 	if (truncatedNames) addWarning("names_truncated", `${truncatedNames} name(s) were shortened to the radio's 16-character field.`);
 	if (badTones) addWarning("tones_dropped", `${badTones} CTCSS/DCS tone(s) could not be read and were left empty.`);

@@ -42,6 +42,29 @@ def bm_device(**overrides: Any) -> dict[str, Any]:
     return device
 
 
+def ure_item(**overrides: Any) -> dict[str, Any]:
+    """A row of URE's band API: human text, as the map's own script reads it."""
+    item = {
+        "id": 1,
+        "name": "ED7YAZ",
+        "lat": 36.8,
+        "lng": -4.5,
+        "freq": "145.650 MHz",
+        "shift": "-600 kHz",
+        "mode": "FM",
+        "has_echolink": False,
+        "subtono": "",
+        "canal": "RV58 - R5",
+        "locator": "IM76SR",
+        "provincia": "Malaga",
+        "comunidad": "Andalucia",
+        "location": "Sierra de Mijas",
+        "icon_key": "R5",
+    }
+    item.update(overrides)
+    return item
+
+
 def hearham_repeater(**overrides: Any) -> dict[str, Any]:
     repeater = {
         "id": 24875,
@@ -68,11 +91,30 @@ def hearham_repeater(**overrides: Any) -> dict[str, Any]:
 class FakeUpstream:
     """A fetcher with canned answers, call counting and failure switches."""
 
-    def __init__(self, devices=None, talkgroups=None, names=None, repeaters=None, places=None):
+    def __init__(self, devices=None, talkgroups=None, names=None, repeaters=None, places=None, ure=None):
         self.devices = devices if devices is not None else [bm_device()]
         self.talkgroups = talkgroups or {214702: [{"talkgroup": "21429", "slot": "2", "repeaterid": "214702"}]}
         self.names = names or {"21429": "Provincial Málaga", "214": "Spain", "9": "Local"}
         self.repeaters = repeaters if repeaters is not None else [hearham_repeater()]
+        if ure is None:
+            ure = {
+                "repe144": [
+                    # same repeater as the HearHam fake, with the coordinator's tone
+                    ure_item(name="ED7YAO", freq="145.725 MHz", shift="-600 kHz", subtono="77.0 Hz"),
+                    ure_item(name="ED7YAZ", freq="145.650 MHz", shift="-600 kHz", subtono=""),
+                    # a decimal comma and a spaced shift
+                    ure_item(id=3, name="ED1ZBG", freq="145.712,5 MHz", shift="- 600 kHz", subtono="88.5 Hz", provincia="Ourense"),
+                    # not analog voice
+                    ure_item(id=4, name="ED7DS", freq="145.637,5 MHz", shift="", mode="D-Star"),
+                    # a typo upstream: a frequency of 7.6
+                    ure_item(id=5, name="ED7BAD", freq="7.6 MHz", shift="-7.6 MHz"),
+                ],
+                "repe432": [
+                    ure_item(id=6, name="ED7UHF", freq="438.750 MHz", shift="-7.6 MHz", subtono="77.0 Hz", provincia="Malaga"),
+                    ure_item(id=7, name="ED7UHF2", freq="439.350 MHz", shift="-9.9MHz", subtono="71.9 Hz", provincia="Malaga"),
+                ],
+            }
+        self.ure = ure
         self.places = places if places is not None else [
             {"lat": "36.7213", "lon": "-4.4214", "display_name": "Málaga, Andalucía, España",
              "name": "Málaga", "type": "administrative", "address": {"country_code": "es"}},
@@ -97,6 +139,13 @@ class FakeUpstream:
             return self.talkgroups[device_id]
         if url.rstrip("/").endswith("/v2/talkgroup"):
             return self.names
+        if "ure.es" in url:
+            band = url.rsplit("band=", 1)[-1]
+            if band not in self.ure:
+                from server.upstream import UpstreamError
+
+                raise UpstreamError(url, "no such band", 404)
+            return {"success": True, "band": band, "items": self.ure[band]}
         if "hearham.com" in url:
             return self.repeaters
         if "nominatim" in url:

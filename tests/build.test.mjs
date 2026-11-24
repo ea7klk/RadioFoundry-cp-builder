@@ -418,3 +418,127 @@ test("an unknown simplex contact falls back to TG 99 and says so", () => {
 	assert.equal(result.model.channels[0].contact.id, 99);
 	assert.ok(result.warnings.some((warning) => warning.code === "simplex_contact_unknown"));
 });
+
+// --- bands and prefixes ---
+
+test("marine channels keep the MAR- prefix in the codeplug", () => {
+	const result = buildCodeplug(base({ packs: ["marine_intl"], dmr: [], analog: [], options: { aprsConfig: false } }));
+	const names = result.model.channels.map((channel) => channel.name);
+	assert.ok(names.includes("MAR-16"));
+	assert.ok(names.includes("MAR-37A"));
+	assert.equal(names.filter((name) => name.startsWith("MAR-")).length, 56);
+});
+
+test("a UHF analog repeater becomes a UHF channel with its tone", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [analogRepeater({ callsign: "ED7YAE", downlink_mhz: 438.65, uplink_mhz: 431.05, tx_tone: "82.5", rx_tone: "" })],
+		options: { aprsConfig: false },
+	}));
+	const channel = result.model.channels[0];
+	assert.equal(channel.rxHz, 438_650_000);
+	assert.equal(channel.txHz, 431_050_000);
+	assert.equal(channel.txTone, "82.5");
+	assert.equal(channel.rxTone, "");
+	assert.equal(channel.mode, "fm");
+});
+
+test("VHF and UHF repeaters from both sources land in one zone", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		dmr: [],
+		analog: [
+			analogRepeater({ callsign: "ED7YAD", downlink_mhz: 145.7, uplink_mhz: 145.1 }),
+			analogRepeater({ callsign: "ED7YAE", downlink_mhz: 438.65, uplink_mhz: 431.05 }),
+		],
+		options: { aprsConfig: false },
+	}));
+	const zone = result.model.zones.find((entry) => entry.name === "ANALOG");
+	assert.equal(zone.channels.length, 2);
+	assert.deepEqual(result.model.channels.map((channel) => channel.rxHz).sort((a, b) => a - b), [145_700_000, 438_650_000]);
+});
+
+// --- timeslot overrides on talkgroup contacts ---
+
+test("a talkgroup contact carries the slot its repeater publishes", () => {
+	const result = buildCodeplug(base({ dmr: [dmrRepeater()] }));
+	const byId = new Map(result.model.contacts.map((contact) => [contact.id, contact]));
+	assert.equal(byId.get(21429).timeslot, 2, "Provincial Malaga is on TS2 at this repeater");
+	assert.equal(byId.get(214).timeslot, 1);
+	assert.equal(byId.get(91).timeslot, 1);
+});
+
+test("a talkgroup without a published slot gets no override", () => {
+	const result = buildCodeplug(base({ dmr: [dmrRepeater({ talkgroups: [{ tg: 9, slot: 0, name: "Local" }] })] }));
+	assert.equal(result.model.contacts[0].timeslot, 0);
+});
+
+test("the TG 9 fallback has no override", () => {
+	const result = buildCodeplug(base({ dmr: [dmrRepeater({ talkgroups: [] })] }));
+	const contact = result.model.channels.find((channel) => channel.mode === "dmr").contact;
+	assert.equal(contact.id, 9);
+	assert.equal(contact.timeslot, 0);
+});
+
+test("the same talkgroup on two slots becomes two contacts, each named for its slot", () => {
+	const second = dmrRepeater({
+		id: 214706,
+		callsign: "EA7URV",
+		talkgroups: [{ tg: 214, slot: 2, name: "Spain" }, { tg: 91, slot: 1, name: "World-wide" }],
+	});
+	const result = buildCodeplug(base({ dmr: [dmrRepeater(), second] }));
+	const spains = result.model.contacts.filter((contact) => contact.id === 214);
+	assert.equal(spains.length, 2, "one record per override");
+	assert.deepEqual(spains.map((contact) => contact.timeslot).sort(), [1, 2]);
+	assert.deepEqual(spains.map((contact) => contact.name).sort(), ["Spain TS1", "Spain TS2"]);
+	// a talkgroup on one slot keeps its plain name
+	assert.deepEqual(result.model.contacts.filter((contact) => contact.id === 91).map((contact) => contact.name), ["World-wide"]);
+	const lists = new Map(result.model.rxLists.map((list) => [list.name, list.contacts]));
+	assert.deepEqual(lists.get("ED7ZAC").map((contact) => `${contact.id}:${contact.timeslot}`), ["21429:2", "214:1", "91:1"]);
+	assert.deepEqual(lists.get("EA7URV").map((contact) => `${contact.id}:${contact.timeslot}`), ["214:2", "91:1"]);
+	assert.ok(result.notes.some((note) => note.code === "timeslot_split"));
+});
+
+test("each channel's default contact is the one for its own slot", () => {
+	const second = dmrRepeater({ id: 214706, callsign: "EA7URV", talkgroups: [{ tg: 214, slot: 2, name: "Spain" }] });
+	const result = buildCodeplug(base({ dmr: [dmrRepeater(), second] }));
+	const [first, other] = result.model.channels.filter((channel) => channel.mode === "dmr");
+	assert.equal(first.contact.id, 21429);
+	assert.equal(other.contact.id, 214);
+	assert.equal(other.contact.timeslot, 2);
+	assert.equal(other.timeslot, 2);
+});
+
+test("a slot given as a string is read, anything else is no override", () => {
+	const result = buildCodeplug(base({
+		packs: [],
+		analog: [],
+		dmr: [dmrRepeater({ talkgroups: [{ tg: 214, slot: "2", name: "Spain" }, { tg: 91, slot: "x", name: "World-wide" }] })],
+		options: { aprsConfig: false },
+	}));
+	assert.equal(result.model.contacts.find((contact) => contact.id === 214).timeslot, 2);
+	assert.equal(result.model.contacts.find((contact) => contact.id === 91).timeslot, 0);
+});
+
+test("timeslot overrides survive the YAML round trip", () => {
+	const second = dmrRepeater({ id: 214706, callsign: "EA7URV", talkgroups: [{ tg: 214, slot: 2, name: "Spain" }] });
+	const result = buildCodeplug(base({ packs: [], analog: [], dmr: [dmrRepeater(), second], options: { aprsConfig: false } }));
+	assert.match(result.yaml, /timeSlotOverride: TS2/);
+	const model = empty();
+	importQdmr(model, result.yaml);
+	const spains = model.contacts.filter((contact) => contact.id === 214);
+	assert.deepEqual(spains.map((contact) => contact.timeslot).sort(), [1, 2]);
+	assert.equal(model.channels.find((channel) => channel.name === "EA7URV").contact.timeslot, 2);
+});
+
+test("timeslot overrides survive the CSV round trip", () => {
+	const result = buildCodeplug(base({ packs: [], analog: [], dmr: [dmrRepeater()], options: { aprsConfig: false } }));
+	const contactsCsv = result.csvFiles.find((file) => file.name === "contacts.csv").text;
+	assert.match(contactsCsv, /Provincial Malag,21429,Group,2/);
+	const model = empty();
+	const { results } = importAll(model, result.csvFiles.map((file) => ({ name: file.name, text: file.text })));
+	assert.deepEqual(results.find((entry) => entry.table === "contacts").problems, []);
+	assert.equal(model.contacts.find((contact) => contact.id === 21429).timeslot, 2);
+	assert.equal(model.channels[0].contact.timeslot, 2);
+});

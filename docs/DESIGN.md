@@ -45,6 +45,8 @@ The order of operations is what makes the output predictable:
 1. **DMR repeaters**, in the order the user selected them. Each one's talkgroups
    create contacts the first time they are seen; a talkgroup shared by two
    repeaters is one contact.
+   Contacts are keyed by (call type, number, timeslot override), so a talkgroup
+   subscribed on both slots yields two records rather than losing one override.
 2. **DMR simplex channels**, from the selected plan: voice channels first, then
    access points if asked for, and per frequency one channel per chosen contact
    (TG 99, AllCall, or both). The plan's own channel names are kept and the
@@ -87,9 +89,11 @@ is applied without a line here.
   `tests/dmr.test.mjs`. Keep the published names; the contact is appended by
   `planChannels`.
 - **A new repeater source**: a module in `server/` that normalises to the shapes
-  in `brandmeister.py` / `hearham.py`, a route in `server/app.py`, and a section
-  in `web/index.html`. Keep `downlink_mhz` (the user's RX) and `uplink_mhz` (the
-  user's TX) explicit.
+  in `brandmeister.py` / `hearham.py` (set `source` on every record, and
+  `band` where the source publishes one), a name in `service.SOURCES` in the
+  order it should win a merge, fetching in `Service.analog_nearby`, and a row in
+  the page's source list. Keep `downlink_mhz` (the user's RX) and `uplink_mhz`
+  (the user's TX) explicit.
 - **A new export format**: RadioFoundry already has CHIRP and CSV importers; a
   new writer belongs upstream in the vendored tree, not here.
 
@@ -98,6 +102,9 @@ is applied without a line here.
 - An upstream failure with a cached copy returns the copy with `stale: true`,
   and the page says the data is old. Without a copy, the route answers 502 with
   a JSON error and the page keeps whatever it had.
+- With several repeater sources, one failing source is reported in
+  `failed_sources` and the others still answer; only when every source fails
+  does the route answer 502.
 - A per-repeater talkgroup failure affects that repeater only; the rest of the
   selection still builds, and the row offers a retry.
 - A malformed preference in `localStorage` is ignored rather than breaking the

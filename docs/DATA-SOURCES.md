@@ -28,6 +28,12 @@ a missing channel from a wrong one.
   (ED1ZAS: Brandmeister `tx 438.2250`, `rx 430.6250`; HearHam 438.225 MHz with
   a −7.6 MHz offset), and against the operator's own description of the
   repeater's shift.
+- **Slots**: each static talkgroup row carries `slot` (1 or 2). It becomes that
+  contact's **timeslot override** in the codeplug, because the slot is a property
+  of the subscription at that repeater: the same talkgroup can be TS1 on one and
+  TS2 on another. A talkgroup used on both slots by the selected repeaters gets
+  two contact records (`… TS1`, `… TS2`), since a contact holds one override; the
+  build output reports it.
 - **"The first talkgroup"**: Brandmeister returns static talkgroups as an array
   with no documented order. The builder keeps the API's order and takes the
   first entry as the channel's default contact, which is what its own
@@ -87,6 +93,43 @@ the operator brings the data, the builder only reads it.
 RepeaterBook was considered as a built-in source and rejected: its API requires
 an authenticating key and its terms do not allow a public proxy. ukrepeater.net
 (the UK's RSGB ETCC data) was probed and is behind a bot challenge.
+
+## URE — Spanish repeaters, both bands
+
+- **Where**: the map at <https://www.ure.es/repetidores/> loads a band at a time
+  from `https://www.ure.es/appure/repetidores-nuevos_test/api.php?band=repe144`
+  (`repe432`, `repe1200`, `repe50`, `repe28`, `repeATV` also exist; this project
+  reads `repe144` and `repe432`).
+- **What it holds** (2026-11-24): 135 rows on 2 m and 126 on 70 cm, of which 122
+  and 87 are FM; the rest are D-Star, DMR, C4FM and APRS, which are skipped
+  because they are not analog FM channels.
+- **Fields**: `name` (callsign), `freq` and `shift` as text, `subtono` as text,
+  `mode`, `lat`/`lng`, `provincia`, `locator`, `canal` (the URE channel code,
+  e.g. `RV58 - R5`), `has_echolink`.
+- **Parsing**, because the text is not uniform:
+  - `145.725 MHz`, `145.712,5 MHz` (Spanish notation: dot between MHz and a kHz
+    part that carries a decimal comma), `438.900 MHz`.
+  - `-600 kHz`, `- 600 kHz`, `-7.6 MHz`, `- 7.6 MHz`, `-7.6MHz`, `-7.6 Mhz`, and
+    a bare `-600` meaning kHz.
+  - `77.0 Hz`, `77 Hz`, `88,5 Hz`; anything outside 30–300 Hz is not CTCSS.
+  - A frequency outside 28–1300 MHz is an upstream typo (one row carries
+    `7.6 MHz`) and is dropped, as is a shift that would leave the band.
+- **Why it is here**: it is the coordinator's own list, and it is the only
+  source found with meaningful Spanish UHF analog coverage. RepeaterBook needs a
+  key; ukrepeater.net is behind a bot challenge; the EA4T.es data HearHam
+  republishes carries the same gaps.
+- **Tone direction**: URE publishes one `subtono` per repeater, the tone the
+  user sends, so it becomes the channel's **TX tone** and the receive tone stays
+  empty.
+
+## Merging the two repeater sources
+
+`ure` is queried first. A repeater is identified by callsign and output
+frequency rounded to the kHz, so the same repeater from both sources is one
+channel: URE's record is kept, and if it has no tone but HearHam does, that tone
+is filled in and marked (`tone_source`). The API reports `counts` per band,
+`by_source`, and any `failed_sources`, so the page can say "VHF 11 · UHF 9, from
+URE + HearHam".
 
 ## OpenStreetMap Nominatim — place search
 

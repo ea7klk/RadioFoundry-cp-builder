@@ -15,9 +15,10 @@ Set a location — coordinates, a Maidenhead locator or a nearby city — then a
   its static talkgroups. The first talkgroup the API returns becomes the
   channel's default contact; every talkgroup goes into the channel's RX group
   list and into the contact table.
-- **Nearby analog repeaters**, from the HearHam open database, with the
-  repeater's shift and its CTCSS/DCS tones — or from a repeater list you
-  already have, as CSV or JSON, read in the browser.
+- **Nearby analog repeaters on VHF and UHF**, from URE's national list for
+  Spain and the HearHam open database elsewhere, with the repeater's shift and
+  its CTCSS/DCS tones — or from a repeater list you already have, as CSV or
+  JSON, read in the browser.
 - **DMR simplex channels** on the Spanish national plan, as a group call to
   **TG 99**, an **AllCall** to 16777215, or **both** — with a channel name that
   says which.
@@ -70,7 +71,7 @@ node --test "tests/*.test.mjs" # builder: packs, model, YAML and CSV round trips
 
 | From | Channels | Contacts | RX group list | Zone |
 |---|---|---|---|---|
-| DMR repeater | one per repeater, RX = repeater TX | every static talkgroup, shared across repeaters | one per repeater, named after its callsign | `DMR` |
+| DMR repeater | one per repeater, RX = repeater TX | every static talkgroup, with the timeslot override the repeater publishes | one per repeater, named after its callsign | `DMR` |
 | Analog repeater | one per repeater, with TX/RX tone | — | — | `ANALOG` |
 | Your own list (CSV/JSON) | one per row, with TX/RX tone | — | — | `ANALOG` |
 | DMR simplex plan | one per frequency and contact, talkaround, CC1 | TG 99 and/or AllCall | — | `DMR SIMPLEX` (+ `DMR ACCESS`) |
@@ -84,6 +85,10 @@ node --test "tests/*.test.mjs" # builder: packs, model, YAML and CSV round trips
 - A DMR channel's **RX group list holds every static talkgroup** of that
   repeater (up to the radio's 32 entries per list), so the talkgroups are
   reachable without editing the contact on the radio.
+- **Every talkgroup contact carries that repeater's timeslot override**, so a
+  talkgroup pinned to TS2 still goes out on TS2 from a channel whose own slot is
+  1. When two selected repeaters use the same talkgroup on different slots, there
+  is one contact per slot, named `… TS1` / `… TS2`; the build output says so.
 - **APRS** is a fixed position at your location, as a six-character locator on
   the region's usual frequency (144.800 in Region 1, 144.390 in Region 2,
   country exceptions in Region 3), linked to that APRS channel as its revert
@@ -104,7 +109,7 @@ The builder refuses to write a file when a table would overflow (1024 channels,
 | APRS | R1 / R2 / R3 | terrestrial APRS, ISS, and the R3 national exceptions | aprs.org, IARU R3 band plan |
 | PMR446 | R1 (+ MY, SG, AE, IN, VN) | 16 analog channels | CEPT ECC Decision (15)05 |
 | FRS / GMRS | R2 | 22 channels | US FCC |
-| Marine VHF | worldwide | ITU Appendix 18, ship and shore frequencies | US Coast Guard |
+| Marine VHF | worldwide | ITU Appendix 18, ship and shore frequencies, named `MAR-16`, `MAR-37A`, … | US Coast Guard |
 | NOAA weather | R2 | WX1–WX10, receive only | NOAA NWS |
 
 The country selector sets the IARU region and the APRS frequency; the region can
@@ -144,6 +149,30 @@ The optional **access-point** frequencies (PA1-V … PA6-U, 144.8125–144.875 a
 sit on slot 2 and get their own `DMR ACCESS` zone. The plan is Spain's: using it
 with another country selected adds a warning rather than stopping you.
 
+### Analog repeaters: both bands, two sources
+
+A search asks both sources and merges the answers:
+
+- **URE** — the Spanish national coordinator's coordinated list, published
+  through its [repeater map](https://www.ure.es/repetidores/). It carries 135
+  VHF and 126 UHF Spanish repeaters, analog and digital, with province, locator
+  and tone.
+- **HearHam** — community data worldwide.
+
+Where both describe the same repeater (same callsign and output frequency) one
+channel is built, from **URE's record**, since it is the coordinator's own; a
+tone only HearHam has is filled in rather than lost. The **Band** control
+filters the list to VHF (below 300 MHz) or UHF (above), and each row is tagged
+with its band and source.
+
+This matters most in Spain: HearHam's community data holds only 9 analog UHF
+entries for the whole country, where URE lists 87 in the 70 cm band alone. With
+both sources, a 150 km search around Madrid returns 11 VHF and 9 UHF repeaters
+instead of VHF only.
+
+If one source is down the other still answers, and the page says which one was
+unreachable.
+
 ### Your own repeater list
 
 HearHam's coverage varies a lot by country (it is strongest in North America).
@@ -176,6 +205,7 @@ Every setting has an environment variable; see `server/config.py`.
 | `CPB_MAX_RESULTS` | `500` | Most repeaters one search returns |
 | `CPB_BM_TTL` | `900` | Seconds a Brandmeister device list stays fresh |
 | `CPB_HEARHAM_TTL` | `43200` | Seconds a HearHam dump stays fresh |
+| `CPB_URE_TTL` | `43200` | Seconds a URE band list stays fresh |
 | `CPB_GEOCODE_TTL` | `2592000` | Seconds a place search stays fresh |
 | `CPB_GEOCODE_MIN_INTERVAL` | `1.1` | Minimum seconds between Nominatim calls |
 | `CPB_INCLUDE_PRIVATE` | off | Show HearHam entries marked private |
@@ -205,6 +235,7 @@ server/          Python 3.11+ service, standard library only
   service.py     input checks and the shapes the page consumes
   brandmeister.py  Halligan API v2: devices, talkgroups
   hearham.py     HearHam repeater database
+  ure.py         URE's Spanish repeater map, both bands
   geocode.py     Nominatim place search
   cache.py       JSON file cache with stale-if-error
   upstream.py    HTTP fetch with a size limit

@@ -37,17 +37,26 @@ test("FRS has 22 channels, with the 462 and 467 halves", () => {
 	assert.equal(channels[21].rx, 462.725);
 });
 
-test("marine VHF keeps the distress channel and leaves out the guard channels", () => {
+test("marine channels are prefixed MAR- and keep their channel numbers", () => {
 	const channels = PACK_BY_ID.get("marine_intl").channels();
 	const names = channels.map((channel) => channel.name);
-	assert.ok(names.includes("M16"));
-	assert.ok(!names.includes("M70"), "channel 70 is DSC only");
-	assert.ok(!names.includes("M75") && !names.includes("M76"), "75 and 76 are guard channels");
-	const sixteen = channels.find((channel) => channel.name === "M16");
+	assert.ok(names.every((name) => name.startsWith("MAR-")), "every marine channel says MAR-");
+	assert.ok(names.includes("MAR-16"));
+	assert.ok(!names.includes("MAR-70"), "channel 70 is DSC only");
+	assert.ok(!names.includes("MAR-75") && !names.includes("MAR-76"), "75 and 76 are guard channels");
+	// two digits and the 37A suffix survive the prefix
+	assert.ok(names.includes("MAR-37A"));
+	assert.ok(names.includes("MAR-88"));
+	assert.ok(Math.max(...names.map((name) => name.length)) <= 16, "a name fits the radio");
+});
+
+test("marine channel 16 is the distress channel on 156.800", () => {
+	const channels = PACK_BY_ID.get("marine_intl").channels();
+	const sixteen = channels.find((channel) => channel.name === "MAR-16");
 	assert.equal(sixteen.rx, 156.8);
 	assert.equal(sixteen.tx, 156.8);
 	// a duplex channel has the ship transmit on the higher frequency for channel 24
-	const twentyFour = channels.find((channel) => channel.name === "M24");
+	const twentyFour = channels.find((channel) => channel.name === "MAR-24");
 	assert.equal(twentyFour.rx, 161.8);
 	assert.equal(twentyFour.tx, 157.2);
 });

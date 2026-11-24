@@ -12,10 +12,15 @@ from . import __version__
 from .brandmeister import Brandmeister
 from .cache import JsonCache
 from .config import Config
-from .geocode import Geocoder
-from .geo import valid_lat, valid_lon
-from .hearham import HearHam
 from .upstream import UpstreamError
+from .geocode import Geocoder
+from .geo import band_of, valid_lat, valid_lon
+from .hearham import HearHam
+from .ure import Ure
+from .upstream import UpstreamError
+
+
+SOURCES = ("ure", "hearham")
 
 
 class BadRequest(Exception):
@@ -83,6 +88,13 @@ class Service:
             include_private=config.include_private_repeaters,
             **kwargs,
         )
+        self.ure = Ure(
+            cache,
+            ttl=config.ure_ttl,
+            timeout=config.ure_timeout,
+            user_agent=config.user_agent,
+            **kwargs,
+        )
         self.geocoder = Geocoder(
             cache,
             ttl=config.geocode_ttl,
@@ -124,6 +136,14 @@ class Service:
                     "url": "https://hearham.com/api/repeaters/v1",
                     "note": "Open repeater data, cached for 12 hours. Verify a repeater "
                     "and its tone before transmitting.",
+                },
+                {
+                    "id": "ure",
+                    "name": "URE Spanish repeater map",
+                    "url": "https://www.ure.es/repetidores/",
+                    "note": "The Spanish national coordinator's coordinated list, "
+                    "both bands, cached for 12 hours. Where it and HearHam describe "
+                    "the same repeater, URE's record is kept.",
                 },
                 {
                     "id": "nominatim",
@@ -169,25 +189,101 @@ class Service:
         *,
         include_simplex: bool = False,
         toned_only: bool = False,
+        band: str = "all",
+        sources: tuple[str, ...] = SOURCES,
     ) -> dict[str, Any]:
+        """Analog repeaters near a point, from every requested source.
+
+        URE goes first: where it and HearHam describe the same repeater (same
+        callsign and output frequency) URE's record wins, because it is the
+        coordinator's own list and carries more tones. A tone only the other
+        source has is kept rather than lost.
+        """
         self._check_point(lat, lon)
         radius_km = self._check_radius(radius_km)
         limit = min(max(limit, 1), self.config.max_results)
-        repeaters, cached = self.hearham.nearby(
-            lat,
-            lon,
-            radius_km,
-            limit,
-            include_simplex=include_simplex,
-            toned_only=toned_only,
-        )
+        if band not in ("all", "vhf", "uhf"):
+            raise BadRequest("bad_band", "band must be all, vhf or uhf")
+        if not sources:
+            raise BadRequest("bad_sources", "ask for at least one source")
+
+        merged: list[dict[str, Any]] = []
+        by_key: dict[tuple[str, int], dict[str, Any]] = {}
+        used_sources: list[str] = []
+        fetched: list[tuple[str, Any]] = []
+        problems: list[str] = []
+
+        for name in sources:
+            try:
+                if name == "ure":
+                    found = self.ure.nearby(lat, lon, radius_km, self.config.max_results)
+                    used_sources.append("ure")
+                elif name == "hearham":
+                    found, cached = self.hearham.nearby(
+                        lat,
+                        lon,
+                        radius_km,
+                        self.config.max_results,
+                        include_simplex=include_simplex,
+                        toned_only=toned_only,
+                    )
+                    used_sources.append("hearham")
+                    fetched.append(("hearham", cached))
+                else:
+                    raise BadRequest("bad_sources", f"unknown source {name}")
+            except BadRequest:
+                raise
+            except Exception:
+                # One source down must not empty the list; if every source
+                # fails there is nothing to show and the caller hears it.
+                problems.append(name)
+                continue
+
+            for repeater in found:
+                key = (repeater["callsign"], int(round(repeater["downlink_mhz"] * 1000)))
+                if key in by_key:
+                    kept = by_key[key]
+                    if not kept.get("tx_tone") and repeater.get("tx_tone"):
+                        kept["tx_tone"] = repeater["tx_tone"]
+                        kept["tone_source"] = repeater.get("source")
+                    continue
+                by_key[key] = repeater
+                merged.append(repeater)
+
+        if problems and len(problems) == len(sources):
+            raise UpstreamError(sources[0], "every analog repeater source failed", 502)
+
+        merged.sort(key=lambda r: (r["distance_km"], r["callsign"]))
+        counts = {"all": len(merged), "vhf": 0, "uhf": 0}
+        by_source: dict[str, int] = {}
+        for repeater in merged:
+            counts[band_of(repeater["downlink_mhz"])] += 1
+            by_source[repeater.get("source", "?")] = by_source.get(repeater.get("source", "?"), 0) + 1
+
+        if band != "all":
+            merged = [repeater for repeater in merged if band_of(repeater["downlink_mhz"]) == band]
+        if toned_only:
+            merged = [repeater for repeater in merged if repeater.get("tx_tone")]
+        kept = merged[:limit]
+
+        meta = fetched[0][1].meta() if fetched else {
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "stale": False,
+        }
+        if any(entry.meta()["stale"] for _, entry in fetched):
+            meta["stale"] = True
         return {
-            "repeaters": repeaters,
-            "count": len(repeaters),
+            "repeaters": kept,
+            "count": len(kept),
+            "counts": counts,
+            "sources": used_sources,
+            "by_source": by_source,
+            "failed_sources": problems,
             "radius_km": radius_km,
             "limit": limit,
-            "truncated": len(repeaters) == limit,
-            **cached.meta(),
+            "band": band,
+            "truncated": len(merged) > limit,
+            **meta,
         }
 
     def geocode(self, query: str, lang: str = "en") -> dict[str, Any]:
@@ -230,4 +326,6 @@ def parse_params(query: dict[str, list[str]]) -> dict[str, str | None]:
         "lang": one("lang"),
         "include_simplex": one("include_simplex"),
         "toned_only": one("toned_only"),
+        "band": one("band"),
+        "sources": one("sources"),
     }

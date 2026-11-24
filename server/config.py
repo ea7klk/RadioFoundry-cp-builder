@@ -39,6 +39,8 @@ class Config:
     # The HearHam dump is ~10 MB; a long TTL keeps that off their server.
     hearham_ttl: int = 43200
     hearham_timeout: float = 45.0
+    ure_ttl: int = 43200
+    ure_timeout: float = 30.0
     geocode_ttl: int = 2592000
     geocode_timeout: float = 15.0
     geocode_min_interval: float = 1.1
@@ -59,6 +61,8 @@ class Config:
             talkgroup_ttl=_env_int("CPB_TALKGROUP_TTL", cls.talkgroup_ttl),
             hearham_ttl=_env_int("CPB_HEARHAM_TTL", cls.hearham_ttl),
             hearham_timeout=_env_float("CPB_HEARHAM_TIMEOUT", cls.hearham_timeout),
+            ure_ttl=_env_int("CPB_URE_TTL", cls.ure_ttl),
+            ure_timeout=_env_float("CPB_URE_TIMEOUT", cls.ure_timeout),
             geocode_ttl=_env_int("CPB_GEOCODE_TTL", cls.geocode_ttl),
             geocode_timeout=_env_float("CPB_GEOCODE_TIMEOUT", cls.geocode_timeout),
             geocode_min_interval=_env_float("CPB_GEOCODE_MIN_INTERVAL", cls.geocode_min_interval),

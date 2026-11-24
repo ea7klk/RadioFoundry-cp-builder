@@ -462,6 +462,20 @@ select { appearance: auto; }
 
 .distance { font-variant-numeric: tabular-nums; font-weight: 700; }
 
+.band-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin-top: 14px;
+	padding: 9px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--surface-2);
+}
+.band-row .field-label { margin-right: 2px; }
+.band-row .check input { accent-color: var(--accent); }
+
 .file-row { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--border); }
 .file-row input[type="file"] { font-size: 0.84rem; }
 .file-row code { font-family: var(--font-mono); font-size: 0.76rem; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }

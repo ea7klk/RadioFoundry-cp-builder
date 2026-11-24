@@ -134,7 +134,7 @@
 					<span class="step" aria-hidden="true">3</span>
 					<div>
 						<h2 id="dmr-title">Nearby DMR repeaters</h2>
-						<p class="hint">Brandmeister's public Halligan API, filtered by distance. The first static talkgroup the API returns becomes the channel's default contact; all of them go into an RX group list.</p>
+						<p class="hint">Brandmeister's public Halligan API, filtered by distance. The first static talkgroup the API returns becomes the channel's default contact; all of them go into an RX group list, each carrying the timeslot override Brandmeister publishes for that talkgroup on that repeater.</p>
 					</div>
 				</div>
 				<div class="card-body">
@@ -189,7 +189,7 @@
 					<span class="step" aria-hidden="true">4</span>
 					<div>
 						<h2 id="analog-title">Nearby analog repeaters</h2>
-						<p class="hint">FM repeaters from HearHam's open database, with the repeater's shift and any CTCSS/DCS tone it lists. Tone coverage varies by country; entries without one are marked <b>no tone</b>. Verify a repeater before you transmit.</p>
+						<p class="hint">FM repeaters on both bands from URE's national list for Spain and from HearHam's open database elsewhere, with the repeater's shift and any CTCSS/DCS tone. Tone coverage varies; entries without one are marked <b>no tone</b>. Verify a repeater before you transmit.</p>
 					</div>
 				</div>
 				<div class="card-body">
@@ -197,6 +197,12 @@
 						<label for="analog-radius">Radius</label>
 						<input id="analog-radius" type="range" min="5" max="300" step="5" value="50">
 						<output id="analog-radius-out" for="analog-radius">50 km</output>
+					</div>
+					<div class="band-row" role="radiogroup" aria-label="Band">
+						<span class="field-label">Band</span>
+						<label class="check"><input type="radio" name="analog-band" value="all" checked><span>All</span></label>
+						<label class="check"><input type="radio" name="analog-band" value="vhf"><span>VHF</span></label>
+						<label class="check"><input type="radio" name="analog-band" value="uhf"><span>UHF</span></label>
 					</div>
 					<div class="button-row">
 						<button id="analog-search" class="btn" type="button">Find analog repeaters</button>

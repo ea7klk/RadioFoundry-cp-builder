@@ -111,6 +111,7 @@ def normalize_repeater(raw: dict[str, Any]) -> dict[str, Any] | None:
         "operational": _integer(raw.get("operational")),
         "restriction": clean_text(raw.get("restriction"), 20),
         "description": clean_text(raw.get("description")),
+        "source": "hearham",
     }
 
 

@@ -41,6 +41,7 @@ const state = {
 		loading: false,
 		fetchedKey: null,
 		fetchedRadius: null,
+		band: "all",
 		file: { name: "", repeaters: [], report: null },
 	},
 	built: null,
@@ -107,6 +108,7 @@ function saveState() {
 				options: state.options,
 				dmrRadius: state.dmr.radius,
 				analogRadius: state.analog.radius,
+				analogBand: state.analog.band,
 			}),
 		);
 	} catch (error) {
@@ -153,6 +155,7 @@ function loadState() {
 	}
 	if (Number.isFinite(Number(saved.dmrRadius))) state.dmr.radius = clampRadius(Number(saved.dmrRadius));
 	if (Number.isFinite(Number(saved.analogRadius))) state.analog.radius = clampRadius(Number(saved.analogRadius));
+	if (["all", "vhf", "uhf"].includes(saved.analogBand)) state.analog.band = saved.analogBand;
 }
 
 function clampRadius(value) {
@@ -290,7 +293,7 @@ function clearResults() {
 	state.analog.selected.clear();
 	state.analog.fetchedKey = null;
 	state.analog.fetchedRadius = null;
-	state.analog.results = [...state.analog.file.repeaters];
+	state.analog.results = [...fileRepeaters()];
 	setStatus("dmr-status", "");
 	setStatus("analog-status", "");
 	renderDmrResults();
@@ -573,7 +576,7 @@ function renderDmrResults() {
 				const first = tg.talkgroups[0];
 				detail.append(
 					el("span", { text: "Static talkgroups: " }),
-					el("b", { text: `${first.name} (${first.tg})` }),
+					el("b", { text: `${first.name} (${first.tg}${first.slot ? ` · TS${first.slot}` : ""})` }),
 					el("span", { class: "first", text: " default" }),
 				);
 				if (tg.talkgroups.length > 1) {
@@ -633,15 +636,19 @@ async function searchAnalog() {
 			limit: 300,
 			tonedOnly: $("analog-toned").checked,
 			includeSimplex: $("analog-simplex").checked,
+			band: state.analog.band,
 		});
-		state.analog.results = [...(data.repeaters || []), ...state.analog.file.repeaters];
+		state.analog.results = [...(data.repeaters || []), ...fileRepeaters()];
 		state.analog.selected.clear();
 		state.analog.fetchedKey = keyFor(state.location.lat, state.location.lon);
 		state.analog.fetchedRadius = state.analog.radius;
 		const truncated = data.truncated ? ` Showing the first ${state.analog.results.length}.` : "";
+		const split = `VHF ${data.counts?.vhf ?? 0} · UHF ${data.counts?.uhf ?? 0}`;
+		const from = (data.sources || []).map((name) => (name === "ure" ? "URE" : "HearHam")).join(" + ");
+		const failed = data.failed_sources?.length ? ` (${data.failed_sources.join(", ")} did not answer)` : "";
 		setStatus(
 			"analog-status",
-			`${data.count} analog repeater${data.count === 1 ? "" : "s"} within ${data.radius_km} km.${truncated}`,
+			`${data.count} analog repeater${data.count === 1 ? "" : "s"} within ${data.radius_km} km — ${split}, from ${from}${failed}.${truncated}`,
 			data.count ? "ok" : "warn",
 		);
 		renderAnalogResults();
@@ -664,6 +671,15 @@ function toggleAnalog(key, checked) {
 }
 
 const analogKey = (repeater) => `${repeater.source || "hearham"}:${repeater.callsign}:${repeater.downlink_mhz}:${repeater.uplink_mhz}`;
+
+// A repeater matches the band filter: VHF below 300 MHz, UHF above it.
+function inBand(repeater) {
+	if (state.analog.band === "all") return true;
+	const uhf = repeater.downlink_mhz >= 300;
+	return state.analog.band === "uhf" ? uhf : !uhf;
+}
+
+const fileRepeaters = () => state.analog.file.repeaters.filter(inBand);
 
 const hasDistance = (repeater) => repeater.distance_km !== null && repeater.distance_km !== undefined;
 
@@ -693,8 +709,12 @@ function renderAnalogResults() {
 			"aria-label": `Add ${repeater.callsign}, ${distanceText(repeater)}`,
 		});
 		const tags = el("div", { class: "result-tags" });
+		const uhf = repeater.downlink_mhz >= 300;
+		tags.append(el("span", { class: "badge", text: uhf ? "UHF" : "VHF" }));
 		if (repeater.tx_tone) tags.append(el("span", { class: "badge badge-accent", text: `TX tone ${repeater.tx_tone}` }));
 		else tags.append(el("span", { class: "badge badge-warn", text: "no tone" }));
+		if (repeater.source === "ure") tags.append(el("span", { class: "badge", text: repeater.channel ? `URE ${repeater.channel}` : "URE" }));
+		if (repeater.echolink) tags.append(el("span", { class: "badge", text: "Echolink" }));
 		if (repeater.rx_tone) tags.append(el("span", { class: "badge", text: `RX tone ${repeater.rx_tone}` }));
 		if (!repeater.is_repeater) tags.append(el("span", { class: "badge badge-warn", text: "simplex" }));
 		if (repeater.digital_capable) tags.append(el("span", { class: "badge", text: "digital capable" }));
@@ -767,7 +787,7 @@ async function loadRepeaterFile(file) {
 	state.analog.file = { name: file.name, repeaters: parsed.repeaters, report: parsed };
 	state.analog.results = [
 		...state.analog.results.filter((repeater) => repeater.source !== "file"),
-		...parsed.repeaters,
+		...parsed.repeaters.filter(inBand),
 	];
 	state.analog.results.sort((a, b) => {
 		const da = a.distance_km ?? Infinity;
@@ -935,7 +955,12 @@ function renderChannelPreview(channels) {
 			el("td", { class: "num", text: formatMHz(channel.txHz) }),
 			el("td", { text: tone }),
 			el("td", { text: channel.mode === "dmr" ? `${channel.colorCode}/${channel.timeslot}` : "" }),
-			el("td", { text: [channel.contact?.name, channel.rxList?.name].filter(Boolean).join(" · ") }),
+			el("td", {
+				text: [
+					channel.contact ? `${channel.contact.name}${channel.contact.timeslot ? ` · TS${channel.contact.timeslot}` : ""}` : "",
+					channel.rxList?.name,
+				].filter(Boolean).join(" · "),
+			}),
 		));
 	}
 	table.append(head, body);
@@ -1165,6 +1190,9 @@ function resetPage() {
 	$("analog-file-report").replaceChildren();
 	$("analog-file").value = "";
 	state.analog.file = { name: "", repeaters: [], report: null };
+	state.analog.band = "all";
+	const resetBand = document.querySelector('input[name="analog-band"][value="all"]');
+	if (resetBand) resetBand.checked = true;
 	renderLocation();
 	renderPackList();
 	renderSummary();
@@ -1252,6 +1280,14 @@ function wire() {
 		invalidateBuilt();
 		saveState();
 	});
+	for (const input of document.querySelectorAll('input[name="analog-band"]')) {
+		input.addEventListener("change", () => {
+			state.analog.band = input.value;
+			invalidateBuilt();
+			saveState();
+			if (state.analog.fetchedKey) searchAnalog();
+		});
+	}
 	$("analog-toned").addEventListener("change", () => {
 		invalidateBuilt();
 	});
@@ -1321,6 +1357,8 @@ async function init() {
 	$("dmr-radius-out").textContent = `${state.dmr.radius} km`;
 	$("analog-radius").value = String(state.analog.radius);
 	$("analog-radius-out").textContent = `${state.analog.radius} km`;
+	const bandInput = document.querySelector(`input[name="analog-band"][value="${state.analog.band}"]`);
+	if (bandInput) bandInput.checked = true;
 
 	wire();
 	renderLocation();

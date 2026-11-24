@@ -24,7 +24,7 @@ def test_health(server: str):
 def test_meta_lists_the_sources(server: str):
     status, body, _ = get_json(f"{server}/api/meta")
     assert status == 200
-    assert {source["id"] for source in body["sources"]} == {"brandmeister", "hearham", "nominatim"}
+    assert {source["id"] for source in body["sources"]} == {"brandmeister", "hearham", "ure", "nominatim"}
     assert body["limits"]["max_radius_km"] == 300
 
 
@@ -45,7 +45,28 @@ def test_talkgroups_route(server: str):
 def test_analog_route(server: str):
     status, body, _ = get_json(f"{server}/api/repeaters/analog?lat=36.72&lon=-4.42&radius=100")
     assert status == 200
-    assert body["count"] == 1
+    assert body["count"] == 5
+    assert body["counts"]["vhf"] == 3
+    assert body["counts"]["uhf"] == 2
+
+
+def test_analog_route_can_be_narrowed_to_one_band(server: str):
+    status, body, _ = get_json(f"{server}/api/repeaters/analog?lat=36.72&lon=-4.42&radius=100&band=uhf")
+    assert status == 200
+    assert {repeater["callsign"] for repeater in body["repeaters"]} == {"ED7UHF", "ED7UHF2"}
+    assert body["counts"]["vhf"] == 3, "the counts describe the search, not the filter"
+
+
+def test_analog_route_rejects_an_unknown_band(server: str):
+    status, body, _ = get_json(f"{server}/api/repeaters/analog?lat=36.72&lon=-4.42&radius=100&band=shf")
+    assert status == 400
+    assert body["error"]["code"] == "bad_band"
+
+
+def test_analog_route_rejects_an_unknown_source(server: str):
+    status, body, _ = get_json(f"{server}/api/repeaters/analog?lat=36.72&lon=-4.42&radius=100&sources=ure,repeaterbook")
+    assert status == 400
+    assert body["error"]["code"] == "bad_sources"
 
 
 def test_geocode_route(server: str):

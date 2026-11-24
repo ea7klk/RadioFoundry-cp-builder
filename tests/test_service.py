@@ -110,11 +110,11 @@ def test_analog_search_filters_simplex_and_tones(config):
         hearham_repeater(id=5, callsign="ED7YAS", encode="", mode="DMR"),
     ]
     service = Service(config, fetcher=FakeUpstream(repeaters=repeaters))
-    only_repeaters = service.analog_nearby(36.72, -4.42, 100, 50)
+    only_repeaters = service.analog_nearby(36.72, -4.42, 100, 50, sources=("hearham",))
     assert {r["callsign"] for r in only_repeaters["repeaters"]} == {"ED7YAO", "ED7YAP"}
-    everything = service.analog_nearby(36.72, -4.42, 100, 50, include_simplex=True)
+    everything = service.analog_nearby(36.72, -4.42, 100, 50, include_simplex=True, sources=("hearham",))
     assert {r["callsign"] for r in everything["repeaters"]} == {"ED7YAO", "ED7YAP", "ED7YAQ", "ED7YAR"}
-    toned = service.analog_nearby(36.72, -4.42, 100, 50, include_simplex=True, toned_only=True)
+    toned = service.analog_nearby(36.72, -4.42, 100, 50, include_simplex=True, toned_only=True, sources=("hearham",))
     assert [r["callsign"] for r in toned["repeaters"]] == ["ED7YAO"]
 
 
@@ -126,9 +126,9 @@ def test_private_repeaters_are_hidden_unless_asked_for(config):
     from dataclasses import replace
 
     service = Service(config, fetcher=FakeUpstream(repeaters=repeaters))
-    assert service.analog_nearby(36.72, -4.42, 100, 50)["count"] == 1
+    assert service.analog_nearby(36.72, -4.42, 100, 50, sources=("hearham",))["count"] == 1
     open_service = Service(replace(config, include_private_repeaters=True), fetcher=FakeUpstream(repeaters=repeaters))
-    assert open_service.analog_nearby(36.72, -4.42, 100, 50)["count"] == 2
+    assert open_service.analog_nearby(36.72, -4.42, 100, 50, sources=("hearham",))["count"] == 2
 
 
 def test_stale_upstream_data_is_flagged(config):
