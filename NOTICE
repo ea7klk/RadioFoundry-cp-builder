@@ -3,7 +3,9 @@ SPDX-License-Identifier: MIT
 RadioFoundry CP Builder
 Copyright (c) 2026 The RadioFoundry-cp-builder Authors
 
-This product is MIT licensed; the full text is in LICENSE.
+This project is MIT licensed. LICENSE holds the licence as published, unchanged
+so that it is recognised as MIT; the attribution it requires is here and in the
+vendored tree it names.
 
 It is an independent project, not an official RadioFoundry release. It is
 based on RadioFoundry (https://github.com/RadioFoundry/RadioFoundry), which is

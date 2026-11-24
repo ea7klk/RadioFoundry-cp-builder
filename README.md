@@ -226,8 +226,14 @@ licence and notices; see `VENDOR.md` there.
 
 ## Licence
 
-MIT. This is an independent project, not an official RadioFoundry release; it is
-based on [RadioFoundry](https://github.com/RadioFoundry/RadioFoundry), which is
-MIT licensed and whose copyright notices are kept in the vendored files. Radio
-regulations are yours to follow: a channel in a codeplug does not grant the
-right to transmit on it.
+MIT — the same licence as [RadioFoundry](https://github.com/RadioFoundry/RadioFoundry)
+and of every dependency this project has (there are none at runtime beyond the
+Python and browser standard libraries). `LICENSE` holds the licence text;
+`NOTICE` holds the attribution it requires, including the upstream copyright and
+the data-source credits.
+
+This is an independent project, not an official RadioFoundry release. Code
+copied from RadioFoundry keeps its own copyright line in each vendored file.
+
+Radio regulations are yours to follow: a channel in a codeplug does not grant
+the right to transmit on it.

@@ -19,14 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This project contains code copied from RadioFoundry
-(https://github.com/RadioFoundry/RadioFoundry), also MIT licensed:
-
-Copyright (c) 2026 The RadioFoundry Authors (see AUTHORS)
-
-The complete upstream licence and author lists are kept in
-web/vendor/radiofoundry/ (LICENSE, AUTHORS, CONTRIBUTORS). The SPDX and
-copyright lines at the top of each vendored file are unchanged.

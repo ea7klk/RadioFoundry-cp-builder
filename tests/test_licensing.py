@@ -47,10 +47,19 @@ def test_the_vendor_note_names_the_upstream_commit():
     assert re.search(r"\b[0-9a-f]{40}\b", note), "record the upstream commit in VENDOR.md"
 
 
-def test_the_project_licence_keeps_the_upstream_notice():
+def test_the_project_licence_is_the_unmodified_mit_text():
+    """LICENSE stays byte-compatible with the MIT template so GitHub and SPDX
+    tools detect it; attribution lives in NOTICE and the vendored tree."""
     licence = (ROOT / "LICENSE").read_text(encoding="utf-8")
-    assert "MIT License" in licence
-    assert "The RadioFoundry Authors" in licence
+    assert licence.startswith("MIT License\n")
+    assert "Permission is hereby granted, free of charge" in licence
+    assert 'THE SOFTWARE IS PROVIDED "AS IS"' in licence
+    assert "The RadioFoundry Authors" not in licence, "attribution belongs in NOTICE"
+
+
+def test_the_notice_carries_the_upstream_copyright():
+    notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+    assert "Copyright (c) 2026 The RadioFoundry Authors" in notice
 
 
 # Every source file the project owns. The upstream files under web/vendor are
@@ -81,6 +90,7 @@ def test_the_notice_credits_upstream_and_the_data_sources():
     assert "MIT" in notice
     assert "RadioFoundry/RadioFoundry" in notice
     assert "docs/DATA-SOURCES.md" in notice
+    assert "web/vendor/radiofoundry/VENDOR.md" in notice
 
 
 def test_the_container_image_declares_its_licence():
